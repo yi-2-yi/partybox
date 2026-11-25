@@ -408,6 +408,63 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Future<void> _showOneNightDemoPicker() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: PartyColors.bgSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '选择一夜终极狼人体验板子（AI 陪玩）',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              '只有一夜，全员参与推理不淘汰，小心你的身份牌被强盗或捣蛋鬼悄悄换掉！',
+              style: TextStyle(color: PartyColors.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 14),
+            _DemoPresetTile(
+              title: '3 人迷你局（6 张牌 · 3 张底牌）',
+              subtitle: '2狼 + 预言家 + 强盗 + 捣蛋鬼 + 村民',
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.controller
+                    .startOneNightDemo(preset: OneNightConfig.preset3());
+              },
+            ),
+            _DemoPresetTile(
+              title: '5 人经典局（8 张牌 · 推荐）',
+              subtitle: '2狼 + 预言家 + 强盗 + 捣蛋鬼 + 酒鬼 + 失眠者 + 村民',
+              highlight: true,
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.controller
+                    .startOneNightDemo(preset: OneNightConfig.preset5());
+              },
+            ),
+            _DemoPresetTile(
+              title: '7 人进阶局（10 张牌 · 含爪牙与皮匠）',
+              subtitle: '2狼 + 爪牙 + 2守夜人 + 预言家 + 强盗 + 捣蛋鬼 + 失眠者 + 皮匠',
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.controller
+                    .startOneNightDemo(preset: OneNightConfig.preset7());
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final ctrl = widget.controller;
@@ -550,77 +607,26 @@ class _HomePageState extends State<HomePage> {
                     demoLabel: '单人快速体验狼人杀（AI 陪玩 · 含 12 人警长局）',
                     onDemo: _showWerewolfDemoPicker,
                   ),
+                  // Card 3: One Night Ultimate Werewolf (NEW!)
+                  const SizedBox(height: 16),
+                  _GameHeroCard(
+                    badgeText: '新上线 · 3–10人 · 10分钟快局',
+                    badgeColor: PartyColors.witchPurple,
+                    icon: Icons.dark_mode,
+                    gradientColors: const [Color(0xFF2B1B4D), Color(0xFF141129)],
+                    borderColor: PartyColors.witchPurple.withValues(alpha: 0.55),
+                    title: '一夜终极狼人 · 换牌推理',
+                    description:
+                        'N+3 发牌含 3 张底牌、11 种经典角色（独狼/爪牙/预言家/强盗/捣蛋鬼/酒鬼/失眠者/皮匠/猎人），只有一夜全员参与无淘汰！',
+                    primaryButtonLabel: '局域网 / 热点建房（无网开一夜狼）',
+                    onLanHost: () =>
+                        ctrl.startLanHost(gameType: GameType.oneNight),
+                    onLanJoin: _showLanJoinSheet,
+                    onOnline: () => _showOnlineSheet(GameType.oneNight),
+                    demoLabel: '单人快速体验一夜狼（AI 陪玩 · 3/5/7人局）',
+                    onDemo: _showOneNightDemoPicker,
+                  ),
                 ],
-
-                const SizedBox(height: 22),
-
-                const Text(
-                  '更多桌游（共享同一联机底座）',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: PartyColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: PartyColors.bgCard,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: PartyColors.border),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.dark_mode,
-                        color: PartyColors.witchPurple,
-                        size: 26,
-                      ),
-                      const SizedBox(width: 14),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '一夜终极狼人',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            SizedBox(height: 2),
-                            Text(
-                              '3–10人 · 10分钟快局 · 换牌与推理，无淘汰',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: PartyColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: PartyColors.bgElevated,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: const Text(
-                          '下一期规划',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: PartyColors.textMuted,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ],
             ),
           ),

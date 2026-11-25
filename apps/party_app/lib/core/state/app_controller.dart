@@ -127,6 +127,27 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  Future<void> startOneNightDemo({OneNightConfig? preset}) async {
+    await _resetConnection();
+    isBusy = true;
+    lastError = null;
+    notifyListeners();
+
+    try {
+      final transport = LocalDemoTransport(
+        playerName: nickname,
+        gameType: GameType.oneNight,
+        oneNightConfig: preset ?? OneNightConfig.preset5(),
+      );
+      _attachTransport(transport);
+    } catch (e) {
+      lastError = e.toString();
+    } finally {
+      isBusy = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> startLanHost({GameType gameType = GameType.werewolf}) async {
     await _resetConnection();
     isBusy = true;
@@ -250,6 +271,13 @@ class AppController extends ChangeNotifier {
   }
 
   void updateGuandanConfig(GuandanConfig config) {
+    _transport?.send(ClientMessage(
+      type: ClientMessageType.updateConfig,
+      payload: {'config': config.toJson()},
+    ));
+  }
+
+  void updateOneNightConfig(OneNightConfig config) {
     _transport?.send(ClientMessage(
       type: ClientMessageType.updateConfig,
       payload: {'config': config.toJson()},

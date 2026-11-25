@@ -16,9 +16,9 @@ void main() {
 
     expect(find.text('PartyBox'), findsOneWidget);
     expect(find.text('掼蛋 · 聚会无线牌局'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('一夜终极狼人'), 200);
+    await tester.scrollUntilVisible(find.text('一夜终极狼人 · 换牌推理'), 250);
     expect(find.text('狼人杀 · 智能聚会法官'), findsOneWidget);
-    expect(find.text('一夜终极狼人'), findsOneWidget);
+    expect(find.text('一夜终极狼人 · 换牌推理'), findsOneWidget);
 
     // Start 12-player demo with sheriff enabled by default
     await ctrl.startLocalDemo(preset: WerewolfConfig.preset12Idiot());
@@ -124,6 +124,41 @@ void main() {
       await tester.pump();
       expect((ctrl.snapshot!.gameState!['myHand'] as List).length, lessThan(27));
     }
+
+    await tester.runAsync(() async {
+      await ctrl.leaveRoom();
+    });
+    await tester.pump();
+  });
+
+  testWidgets('One Night Demo Lobby -> Deal 5+3 -> Anti-peek Role -> NightStep', (tester) async {
+    final ctrl = AppController(narrator: NarratorService(enabled: false));
+    addTearDown(ctrl.dispose);
+
+    await tester.pumpWidget(PartyBoxApp(controller: ctrl));
+    await tester.pumpAndSettle();
+
+    await ctrl.startOneNightDemo(preset: OneNightConfig.preset5());
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('一夜终极狼人大厅'), findsOneWidget);
+    expect(find.textContaining('已入座玩家（5 / 5）'), findsOneWidget);
+    expect(find.textContaining('开始发牌（5人一夜狼 · 8张牌）'), findsOneWidget);
+
+    await tester.tap(find.textContaining('开始发牌'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('一夜狼身份牌（已隐藏）'), findsOneWidget);
+    expect(find.text('底牌 A'), findsOneWidget);
+    expect(find.text('底牌 B'), findsOneWidget);
+    expect(find.text('底牌 C'), findsOneWidget);
+
+    await tester.tap(find.text('我已记住初始身份，准备天黑'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(ctrl.snapshot!.gameState!['phase'], isNot('roleReveal'));
 
     await tester.runAsync(() async {
       await ctrl.leaveRoom();

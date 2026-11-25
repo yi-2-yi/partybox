@@ -206,4 +206,66 @@ void main() {
     );
     expect(afterPlay.gameState!['lastPlay']['type'], 'single');
   });
+
+  test('5 real WebSocket clients create and play One Night Ultimate Werewolf over PartyServer', () async {
+    final server = PartyServer(
+      registry: GamePluginRegistry([
+        WerewolfPlugin(random: Random(7)),
+        GuandanPlugin(random: Random(7)),
+        OneNightPlugin(random: Random(7)),
+      ]),
+      random: Random(7),
+    );
+    await server.start(address: InternetAddress.loopbackIPv4, port: 0);
+    addTearDown(server.stop);
+
+    final clients = <_TestClient>[];
+    addTearDown(() async {
+      for (final c in clients) {
+        await c.close();
+      }
+    });
+
+    final host = await _TestClient.connect(server.port);
+    clients.add(host);
+    host.send(const ClientMessage(
+      type: ClientMessageType.createRoom,
+      payload: {'gameType': 'oneNight', 'name': '房主'},
+    ));
+    final hostSnap = await host.waitFor((s) => s.yourPlayerId != null);
+    expect(hostSnap.gameType, GameType.oneNight);
+
+    for (var i = 2; i <= 5; i++) {
+      final c = await _TestClient.connect(server.port);
+      clients.add(c);
+      c.send(ClientMessage(
+        type: ClientMessageType.joinRoom,
+        payload: {'roomCode': hostSnap.roomCode, 'name': '朋友$i'},
+      ));
+      await c.waitFor((s) => s.yourPlayerId != null);
+      c.send(const ClientMessage(type: ClientMessageType.toggleReady));
+    }
+
+    await host.waitFor(
+      (s) => s.players.length == 5 && s.players.every((p) => p.isReady),
+    );
+
+    host.send(const ClientMessage(type: ClientMessageType.startGame));
+    for (final c in clients) {
+      final snap = await c.waitFor((s) => s.status == RoomStatus.playing);
+      expect(snap.gameState!['phase'], 'roleReveal');
+      expect(snap.gameState!['me']['initialRole'], isNotNull);
+    }
+
+    for (final c in clients) {
+      c.send(const ClientMessage(
+        type: ClientMessageType.gameAction,
+        payload: {'actionType': OneNightActionType.confirmRole, 'data': {}},
+      ));
+    }
+    final nightSnap = await host.waitFor(
+      (s) => s.gameState?['phase'] == 'nightStep',
+    );
+    expect(nightSnap.gameState!['activeWakeRole'], isNotNull);
+  });
 }

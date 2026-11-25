@@ -29,7 +29,11 @@ class PartyServer {
     GamePluginRegistry? registry,
     Random? random,
   })  : _registry = registry ??
-            GamePluginRegistry([WerewolfPlugin(), GuandanPlugin()]),
+            GamePluginRegistry([
+              WerewolfPlugin(),
+              GuandanPlugin(),
+              OneNightPlugin(),
+            ]),
         _random = random ?? Random();
 
   final GamePluginRegistry _registry;

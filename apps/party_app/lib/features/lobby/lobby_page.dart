@@ -15,9 +15,16 @@ class LobbyPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final snap = controller.snapshot!;
     final isGuandan = snap.gameType == GameType.guandan;
-    final wwConfig = isGuandan ? null : WerewolfConfig.fromJson(snap.gameConfig);
+    final isOneNight = snap.gameType == GameType.oneNight;
+    final wwConfig =
+        (!isGuandan && !isOneNight) ? WerewolfConfig.fromJson(snap.gameConfig) : null;
     final gdConfig = isGuandan ? GuandanConfig.fromJson(snap.gameConfig) : null;
-    final requiredPlayers = isGuandan ? 4 : wwConfig!.totalPlayers;
+    final onConfig = isOneNight ? OneNightConfig.fromJson(snap.gameConfig) : null;
+    final requiredPlayers = isGuandan
+        ? 4
+        : isOneNight
+            ? onConfig!.requiredPlayers
+            : wwConfig!.totalPlayers;
 
     final endpoint = controller.endpointInfo;
     final isHost = snap.isHost;
@@ -82,6 +89,12 @@ class LobbyPage extends StatelessWidget {
                   config: gdConfig!,
                   isHost: isHost,
                   onChanged: controller.updateGuandanConfig,
+                )
+              else if (isOneNight)
+                _OneNightConfigCard(
+                  config: onConfig!,
+                  isHost: isHost,
+                  onChanged: controller.updateOneNightConfig,
                 )
               else
                 _WerewolfConfigCard(
@@ -182,7 +195,9 @@ class LobbyPage extends StatelessWidget {
                           canStart
                               ? (isGuandan
                                   ? '开始发牌（4人掼蛋 · 打 ${GuandanState.levelLabel(gdConfig!.startLevel)} 起）'
-                                  : '开始发牌（${wwConfig!.totalPlayers}人${wwConfig.enableSheriff ? " · 含警长" : ""}）')
+                                  : isOneNight
+                                      ? '开始发牌（${onConfig!.requiredPlayers}人一夜狼 · ${onConfig.roles.length}张牌）'
+                                      : '开始发牌（${wwConfig!.totalPlayers}人${wwConfig.enableSheriff ? " · 含警长" : ""}）')
                               : '等待人数满 $requiredPlayers 人且全员准备（当前 ${snap.players.length} 人）',
                         ),
                       ),
@@ -211,6 +226,149 @@ class LobbyPage extends StatelessWidget {
                     ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OneNightConfigCard extends StatelessWidget {
+  const _OneNightConfigCard({
+    required this.config,
+    required this.isHost,
+    required this.onChanged,
+  });
+
+  final OneNightConfig config;
+  final bool isHost;
+  final ValueChanged<OneNightConfig> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final presets = [
+      ('3人迷你局 (6牌)', OneNightConfig.preset3()),
+      ('5人经典局 (8牌)', OneNightConfig.preset5()),
+      ('7人进阶局 (10牌)', OneNightConfig.preset7()),
+    ];
+
+    final counts = <OneNightRole, int>{};
+    for (final r in config.roles) {
+      counts[r] = (counts[r] ?? 0) + 1;
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.dark_mode,
+                  color: PartyColors.witchPurple,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '一夜狼角色牌组（${config.requiredPlayers}人 + 3张底牌 = ${config.roles.length}张）',
+                  style: const TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: presets.map((entry) {
+                final (label, preset) = entry;
+                final selected = config.presetId == preset.presetId;
+                return ChoiceChip(
+                  label: Text(label),
+                  selected: selected,
+                  selectedColor: PartyColors.witchPurple.withValues(alpha: 0.25),
+                  labelStyle: TextStyle(
+                    color: selected
+                        ? PartyColors.gold
+                        : PartyColors.textPrimary,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    fontSize: 12.5,
+                  ),
+                  onSelected: isHost ? (_) => onChanged(preset) : null,
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: OneNightRole.values.map((role) {
+                final count = counts[role] ?? 0;
+                if (!isHost && count == 0) return const SizedBox.shrink();
+                return Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: PartyColors.bgSurface,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: count > 0
+                          ? PartyColors.witchPurple.withValues(alpha: 0.55)
+                          : PartyColors.border,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '${role.displayName} ×$count',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: count > 0
+                              ? PartyColors.textPrimary
+                              : PartyColors.textMuted,
+                        ),
+                      ),
+                      if (isHost) ...[
+                        const SizedBox(width: 6),
+                        _MiniStepBtn(
+                          icon: Icons.remove,
+                          onTap: count > 0
+                              ? () {
+                                  final next = List<OneNightRole>.from(config.roles);
+                                  next.remove(role);
+                                  if (next.length >= 6) {
+                                    onChanged(config.copyWith(
+                                      presetId: 'custom',
+                                      roles: next,
+                                    ));
+                                  }
+                                }
+                              : null,
+                        ),
+                        const SizedBox(width: 4),
+                        _MiniStepBtn(
+                          icon: Icons.add,
+                          onTap: config.roles.length < 13 && count < 3
+                              ? () {
+                                  final next = [...config.roles, role];
+                                  onChanged(config.copyWith(
+                                    presetId: 'custom',
+                                    roles: next,
+                                  ));
+                                }
+                              : null,
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
         ),
       ),
     );

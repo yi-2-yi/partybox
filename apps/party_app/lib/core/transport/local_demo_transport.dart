@@ -13,6 +13,7 @@ class LocalDemoTransport implements GameTransport {
     GameType gameType = GameType.werewolf,
     WerewolfConfig? werewolfConfig,
     GuandanConfig? guandanConfig,
+    OneNightConfig? oneNightConfig,
     Random? random,
   }) : _random = random ?? Random() {
     _controller = RoomController(
@@ -22,6 +23,7 @@ class LocalDemoTransport implements GameTransport {
       registry: GamePluginRegistry([
         WerewolfPlugin(random: _random),
         GuandanPlugin(random: _random),
+        OneNightPlugin(random: _random),
       ]),
       random: _random,
     );
@@ -36,6 +38,10 @@ class LocalDemoTransport implements GameTransport {
       final cfg = guandanConfig ?? const GuandanConfig();
       _controller.updateConfig(_humanId, cfg.toJson());
       _syncBotsToCount(4);
+    } else if (gameType == GameType.oneNight) {
+      final cfg = oneNightConfig ?? OneNightConfig.preset5();
+      _controller.updateConfig(_humanId, cfg.toJson());
+      _syncBotsToCount(cfg.requiredPlayers);
     }
 
     scheduleMicrotask(() {
@@ -123,6 +129,8 @@ class LocalDemoTransport implements GameTransport {
             _syncBotsToCount(WerewolfConfig.fromJson(cfgMap).totalPlayers);
           } else if (_controller.gameType == GameType.guandan) {
             _syncBotsToCount(4);
+          } else if (_controller.gameType == GameType.oneNight) {
+            _syncBotsToCount(OneNightConfig.fromJson(cfgMap).requiredPlayers);
           }
         case ClientMessageType.toggleReady:
           _controller.toggleReady(_humanId);
@@ -170,7 +178,124 @@ class LocalDemoTransport implements GameTransport {
       _runWerewolfBots(raw);
     } else if (raw is GuandanState) {
       _runGuandanBots(raw);
+    } else if (raw is OneNightState) {
+      _runOneNightBots(raw);
     }
+  }
+
+  void _runOneNightBots(OneNightState state) {
+    final events = <GameEvent>[];
+    var progressed = false;
+
+    try {
+      switch (state.phase) {
+        case OneNightPhase.roleReveal:
+          for (final p in _controller.players) {
+            if ((_controller.rawGameState as OneNightState).phase !=
+                OneNightPhase.roleReveal) {
+              break;
+            }
+            if (p.isBot && !state.confirmedRoleIds.contains(p.id)) {
+              events.addAll(_controller.handleGameAction(
+                p.id,
+                OneNightActionType.confirmRole,
+                const {},
+              ));
+              progressed = true;
+            }
+          }
+
+        case OneNightPhase.nightStep:
+          if (state.isDecoyStep) {
+            events.addAll(_controller.handleGameAction(
+              _humanId,
+              OneNightActionType.hostAdvance,
+              const {},
+            ));
+            progressed = true;
+          } else {
+            final activeRole = state.activeWakeRole!;
+            final holders = state.initialRoleHolders(activeRole);
+            for (final h in holders) {
+              if ((_controller.rawGameState as OneNightState).phase !=
+                      OneNightPhase.nightStep ||
+                  (_controller.rawGameState as OneNightState).activeWakeRole !=
+                      activeRole) {
+                break;
+              }
+              if (_isBot(h.playerId) &&
+                  !state.actedInCurrentStepIds.contains(h.playerId)) {
+                final payload = _buildOneNightBotAction(state, h, activeRole);
+                events.addAll(_controller.handleGameAction(
+                  h.playerId,
+                  OneNightActionType.nightAct,
+                  payload,
+                ));
+                progressed = true;
+              }
+            }
+          }
+
+        case OneNightPhase.dayVote:
+          for (final p in state.players) {
+            if ((_controller.rawGameState as OneNightState).phase !=
+                OneNightPhase.dayVote) {
+              break;
+            }
+            if (_isBot(p.playerId) && !state.votes.containsKey(p.playerId)) {
+              final targets = state.players
+                  .where((t) => t.playerId != p.playerId)
+                  .toList();
+              final pick = targets[_random.nextInt(targets.length)].playerId;
+              events.addAll(_controller.handleGameAction(
+                p.playerId,
+                OneNightActionType.castVote,
+                {'targetId': pick},
+              ));
+              progressed = true;
+            }
+          }
+
+        case OneNightPhase.dayDiscuss:
+        case OneNightPhase.gameOver:
+          break;
+      }
+    } catch (_) {}
+
+    if (progressed) {
+      _emitSnapshot();
+      _emitEvents(events);
+      _scheduleBotStep();
+    }
+  }
+
+  Map<String, dynamic> _buildOneNightBotAction(
+    OneNightState state,
+    OneNightPlayerState bot,
+    OneNightRole role,
+  ) {
+    final others = state.players
+        .where((p) => p.playerId != bot.playerId)
+        .toList();
+    return switch (role) {
+      OneNightRole.werewolf =>
+        state.initialRoleHolders(OneNightRole.werewolf).length == 1
+            ? {'centerIndex': _random.nextInt(3)}
+            : const {},
+      OneNightRole.seer => _random.nextBool()
+          ? {'mode': 'player', 'targetId': others[_random.nextInt(others.length)].playerId}
+          : const {'mode': 'center', 'centerIndices': [0, 1]},
+      OneNightRole.robber => {
+          'targetId': others[_random.nextInt(others.length)].playerId,
+        },
+      OneNightRole.troublemaker => others.length >= 2
+          ? {
+              'targetIds': [others[0].playerId, others[1].playerId],
+            }
+          : const {},
+      OneNightRole.drunk => {'centerIndex': _random.nextInt(3)},
+      _ => const {},
+    };
   }
 
   void _runGuandanBots(GuandanState state) {

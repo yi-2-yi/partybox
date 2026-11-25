@@ -4,6 +4,7 @@ import 'package:party_core/party_core.dart';
 import 'core/state/app_controller.dart';
 import 'core/theme/party_theme.dart';
 import 'features/games/guandan/guandan_table_page.dart';
+import 'features/games/one_night/one_night_table_page.dart';
 import 'features/games/werewolf/werewolf_table_page.dart';
 import 'features/home/home_page.dart';
 import 'features/lobby/lobby_page.dart';
@@ -79,6 +80,9 @@ class _PartyBoxAppState extends State<PartyBoxApp> {
           }
           if (snap.gameType == GameType.guandan) {
             return GuandanTablePage(controller: _controller);
+          }
+          if (snap.gameType == GameType.oneNight) {
+            return OneNightTablePage(controller: _controller);
           }
           return WerewolfTablePage(controller: _controller);
         },
