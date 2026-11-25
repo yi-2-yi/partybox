@@ -137,4 +137,73 @@ void main() {
     );
     expect(nightSnap.gameState!['dayNumber'], 1);
   });
+
+  test('4 real WebSocket clients create and play a Guandan room over PartyServer', () async {
+    final server = PartyServer(
+      registry: GamePluginRegistry([
+        WerewolfPlugin(random: Random(7)),
+        GuandanPlugin(random: Random(7)),
+      ]),
+      random: Random(7),
+    );
+    await server.start(address: InternetAddress.loopbackIPv4, port: 0);
+    addTearDown(server.stop);
+
+    final clients = <_TestClient>[];
+    addTearDown(() async {
+      for (final c in clients) {
+        await c.close();
+      }
+    });
+
+    final host = await _TestClient.connect(server.port);
+    clients.add(host);
+    host.send(const ClientMessage(
+      type: ClientMessageType.createRoom,
+      payload: {'gameType': 'guandan', 'name': '红1'},
+    ));
+    final hostSnap = await host.waitFor((s) => s.yourPlayerId != null);
+    expect(hostSnap.gameType, GameType.guandan);
+
+    for (var i = 2; i <= 4; i++) {
+      final c = await _TestClient.connect(server.port);
+      clients.add(c);
+      c.send(ClientMessage(
+        type: ClientMessageType.joinRoom,
+        payload: {'roomCode': hostSnap.roomCode, 'name': '玩家$i'},
+      ));
+      await c.waitFor((s) => s.yourPlayerId != null);
+      c.send(const ClientMessage(type: ClientMessageType.toggleReady));
+    }
+
+    await host.waitFor(
+      (s) => s.players.length == 4 && s.players.every((p) => p.isReady),
+    );
+
+    host.send(const ClientMessage(type: ClientMessageType.startGame));
+    for (final c in clients) {
+      final snap = await c.waitFor((s) => s.status == RoomStatus.playing);
+      expect((snap.gameState!['myHand'] as List).length, 27);
+    }
+
+    // Current turn player plays their smallest single card
+    final leadClient = clients.firstWhere(
+      (c) => c.latestSnapshot!.gameState!['isMyTurn'] == true,
+    );
+    final hand = (leadClient.latestSnapshot!.gameState!['myHand'] as List)
+        .cast<Map<String, dynamic>>();
+    final cardId = hand.last['id'] as String;
+    leadClient.send(ClientMessage(
+      type: ClientMessageType.gameAction,
+      payload: {
+        'actionType': GuandanActionType.playCards,
+        'data': {'cardIds': [cardId]},
+      },
+    ));
+
+    final afterPlay = await host.waitFor(
+      (s) => s.gameState?['lastPlay'] != null,
+    );
+    expect(afterPlay.gameState!['lastPlay']['type'], 'single');
+  });
 }

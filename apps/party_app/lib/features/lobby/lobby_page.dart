@@ -14,12 +14,16 @@ class LobbyPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final snap = controller.snapshot!;
-    final config = WerewolfConfig.fromJson(snap.gameConfig);
+    final isGuandan = snap.gameType == GameType.guandan;
+    final wwConfig = isGuandan ? null : WerewolfConfig.fromJson(snap.gameConfig);
+    final gdConfig = isGuandan ? GuandanConfig.fromJson(snap.gameConfig) : null;
+    final requiredPlayers = isGuandan ? 4 : wwConfig!.totalPlayers;
+
     final endpoint = controller.endpointInfo;
     final isHost = snap.isHost;
     final me = snap.me;
 
-    final canStart = snap.players.length == config.totalPlayers &&
+    final canStart = snap.players.length == requiredPlayers &&
         snap.players.every((p) => p.isHost || p.isReady);
 
     return Scaffold(
@@ -33,7 +37,7 @@ class LobbyPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '狼人杀大厅 · 房号 ${snap.roomCode}',
+              '${snap.gameType.displayName}大厅 · 房号 ${snap.roomCode}',
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
             ),
             Text(
@@ -44,10 +48,11 @@ class LobbyPage extends StatelessWidget {
         ),
         actions: [
           IconButton(
-            tooltip: controller.ttsEnabled ? '关闭语音法官' : '开启语音法官',
+            tooltip: controller.ttsEnabled ? '关闭语音播报' : '开启语音播报',
             icon: Icon(
               controller.ttsEnabled ? Icons.volume_up : Icons.volume_off,
-              color: controller.ttsEnabled ? PartyColors.gold : PartyColors.textMuted,
+              color:
+                  controller.ttsEnabled ? PartyColors.gold : PartyColors.textMuted,
             ),
             onPressed: controller.toggleTts,
           ),
@@ -71,12 +76,19 @@ class LobbyPage extends StatelessWidget {
 
               const SizedBox(height: 14),
 
-              // Board & Rules Configuration
-              _BoardConfigCard(
-                config: config,
-                isHost: isHost,
-                onChanged: controller.updateConfig,
-              ),
+              // Game-specific Configuration Card
+              if (isGuandan)
+                _GuandanConfigCard(
+                  config: gdConfig!,
+                  isHost: isHost,
+                  onChanged: controller.updateGuandanConfig,
+                )
+              else
+                _WerewolfConfigCard(
+                  config: wwConfig!,
+                  isHost: isHost,
+                  onChanged: controller.updateConfig,
+                ),
 
               const SizedBox(height: 14),
 
@@ -84,7 +96,7 @@ class LobbyPage extends StatelessWidget {
               Row(
                 children: [
                   Text(
-                    '已入座玩家（${snap.players.length} / ${config.totalPlayers}）',
+                    '已入座玩家（${snap.players.length} / $requiredPlayers）',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -93,27 +105,38 @@ class LobbyPage extends StatelessWidget {
                   const Spacer(),
                   if (isHost &&
                       endpoint?.mode != ConnectionMode.localDemo &&
-                      snap.players.length < config.totalPlayers)
+                      snap.players.length < requiredPlayers)
                     TextButton.icon(
                       onPressed: () => controller.addBot(
-                        count: config.totalPlayers - snap.players.length,
+                        count: requiredPlayers - snap.players.length,
                       ),
                       icon: const Icon(Icons.smart_toy_outlined, size: 16),
                       label: const Text('补齐测试占位'),
                     ),
                 ],
               ),
+              if (isGuandan)
+                const Padding(
+                  padding: EdgeInsets.only(top: 4, bottom: 6),
+                  child: Text(
+                    '座位分队规则：1号 & 3号 为红队（对家），2号 & 4号 为蓝队（对家）',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: PartyColors.textSecondary,
+                    ),
+                  ),
+                ),
               const SizedBox(height: 8),
               GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: isGuandan ? 2 : 3,
                   mainAxisSpacing: 10,
                   crossAxisSpacing: 10,
-                  childAspectRatio: 1.05,
+                  childAspectRatio: isGuandan ? 1.65 : 1.05,
                 ),
-                itemCount: config.totalPlayers,
+                itemCount: requiredPlayers,
                 itemBuilder: (ctx, index) {
                   final seatNum = index + 1;
                   final player = snap.players
@@ -123,6 +146,14 @@ class LobbyPage extends StatelessWidget {
                     seatNumber: seatNum,
                     player: player,
                     isMe: player != null && player.id == snap.yourPlayerId,
+                    teamTag: isGuandan
+                        ? (seatNum.isOdd ? '红队' : '蓝队')
+                        : null,
+                    teamColor: isGuandan
+                        ? (seatNum.isOdd
+                            ? PartyColors.wolfRed
+                            : PartyColors.seerCyan)
+                        : null,
                   );
                 },
               ),
@@ -149,8 +180,10 @@ class LobbyPage extends StatelessWidget {
                         icon: const Icon(Icons.play_arrow_rounded),
                         label: Text(
                           canStart
-                              ? '开始发牌（${config.totalPlayers}人${config.enableSheriff ? " · 含警长" : ""}）'
-                              : '等待人数满 ${config.totalPlayers} 人且全员准备（当前 ${snap.players.length} 人）',
+                              ? (isGuandan
+                                  ? '开始发牌（4人掼蛋 · 打 ${GuandanState.levelLabel(gdConfig!.startLevel)} 起）'
+                                  : '开始发牌（${wwConfig!.totalPlayers}人${wwConfig.enableSheriff ? " · 含警长" : ""}）')
+                              : '等待人数满 $requiredPlayers 人且全员准备（当前 ${snap.players.length} 人）',
                         ),
                       ),
                     )
@@ -178,6 +211,86 @@ class LobbyPage extends StatelessWidget {
                     ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GuandanConfigCard extends StatelessWidget {
+  const _GuandanConfigCard({
+    required this.config,
+    required this.isHost,
+    required this.onChanged,
+  });
+
+  final GuandanConfig config;
+  final bool isHost;
+  final ValueChanged<GuandanConfig> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final startOptions = [
+      (2, '经典从 2 打起'),
+      (10, '快速从 10 打起'),
+      (14, '直接打 A 决胜'),
+    ];
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.style, color: PartyColors.guardGreen, size: 18),
+                SizedBox(width: 8),
+                Text(
+                  '掼蛋规则配置（4人 · 2副牌108张）',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: startOptions.map((opt) {
+                final (lvl, label) = opt;
+                final selected = config.startLevel == lvl;
+                return ChoiceChip(
+                  label: Text(label),
+                  selected: selected,
+                  selectedColor: PartyColors.goldSoft,
+                  labelStyle: TextStyle(
+                    color: selected ? PartyColors.gold : PartyColors.textPrimary,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    fontSize: 12.5,
+                  ),
+                  onSelected: isHost
+                      ? (_) => onChanged(config.copyWith(startLevel: lvl))
+                      : null,
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 8),
+            const Divider(color: PartyColors.border),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: const Text('开启进贡 / 还贡（含双大王抗贡）',
+                  style: TextStyle(fontSize: 13.5)),
+              subtitle: const Text(
+                '双下或单下时，下一局由败方进贡最大非逢人配牌，赢家还贡 ≤10 牌',
+                style: TextStyle(fontSize: 11.5, color: PartyColors.textSecondary),
+              ),
+              value: config.enableTribute,
+              onChanged: isHost
+                  ? (v) => onChanged(config.copyWith(enableTribute: v))
+                  : null,
+            ),
+          ],
         ),
       ),
     );
@@ -216,11 +329,13 @@ class _LanHostShareCard extends StatelessWidget {
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.wifi_tethering, color: PartyColors.gold, size: 18),
+                      Icon(Icons.wifi_tethering,
+                          color: PartyColors.gold, size: 18),
                       SizedBox(width: 6),
                       Text(
                         '局域网/热点主机已开启',
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 15),
                       ),
                     ],
                   ),
@@ -265,7 +380,8 @@ class _LanHostShareCard extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 6),
-                          const Icon(Icons.copy, size: 14, color: PartyColors.gold),
+                          const Icon(Icons.copy,
+                              size: 14, color: PartyColors.gold),
                         ],
                       ),
                     ),
@@ -308,8 +424,8 @@ class _OnlineShareCard extends StatelessWidget {
   }
 }
 
-class _BoardConfigCard extends StatelessWidget {
-  const _BoardConfigCard({
+class _WerewolfConfigCard extends StatelessWidget {
+  const _WerewolfConfigCard({
     required this.config,
     required this.isHost,
     required this.onChanged,
@@ -340,7 +456,8 @@ class _BoardConfigCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   '板子与规则配置（${config.totalPlayers}人局）',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w700),
                 ),
               ],
             ),
@@ -372,7 +489,8 @@ class _BoardConfigCard extends StatelessWidget {
                 final count = config.roleCounts[role] ?? 0;
                 if (!isHost && count == 0) return const SizedBox.shrink();
                 return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: PartyColors.bgSurface,
                     borderRadius: BorderRadius.circular(10),
@@ -420,10 +538,12 @@ class _BoardConfigCard extends StatelessWidget {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               dense: true,
-              title: const Text('警长竞选（12人局默认开启）', style: TextStyle(fontSize: 13.5)),
+              title: const Text('警长竞选（12人局默认开启）',
+                  style: TextStyle(fontSize: 13.5)),
               subtitle: const Text(
                 '首日天亮前上警竞选，警长拥有 1.5 票并可移交/撕毁警徽',
-                style: TextStyle(fontSize: 11.5, color: PartyColors.textSecondary),
+                style:
+                    TextStyle(fontSize: 11.5, color: PartyColors.textSecondary),
               ),
               value: config.enableSheriff,
               onChanged: isHost
@@ -436,7 +556,8 @@ class _BoardConfigCard extends StatelessWidget {
               title: const Text('女巫首夜可自救', style: TextStyle(fontSize: 13.5)),
               value: config.witchSelfSaveFirstNight,
               onChanged: isHost
-                  ? (v) => onChanged(config.copyWith(witchSelfSaveFirstNight: v))
+                  ? (v) =>
+                      onChanged(config.copyWith(witchSelfSaveFirstNight: v))
                   : null,
             ),
           ],
@@ -495,11 +616,15 @@ class _SeatCard extends StatelessWidget {
     required this.seatNumber,
     required this.player,
     required this.isMe,
+    this.teamTag,
+    this.teamColor,
   });
 
   final int seatNumber;
   final PlayerInfo? player;
   final bool isMe;
+  final String? teamTag;
+  final Color? teamColor;
 
   @override
   Widget build(BuildContext context) {
@@ -512,9 +637,11 @@ class _SeatCard extends StatelessWidget {
         border: Border.all(
           color: isMe
               ? PartyColors.gold
-              : occupied
-                  ? PartyColors.border
-                  : PartyColors.border.withValues(alpha: 0.4),
+              : teamColor != null
+                  ? teamColor!.withValues(alpha: 0.55)
+                  : occupied
+                      ? PartyColors.border
+                      : PartyColors.border.withValues(alpha: 0.4),
           width: isMe ? 1.6 : 1,
         ),
       ),
@@ -525,11 +652,11 @@ class _SeatCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '$seatNumber号',
-                style: const TextStyle(
+                teamTag != null ? '$seatNumber号 · $teamTag' : '$seatNumber号',
+                style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: PartyColors.gold,
+                  color: teamColor ?? PartyColors.gold,
                 ),
               ),
               if (player?.isHost == true)

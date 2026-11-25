@@ -5,26 +5,38 @@ import 'package:party_core/party_core.dart';
 
 import 'game_transport.dart';
 
-/// Single-device demo transport with smart AI bots so one user can experience
-/// a full 6, 9, or 12-player (with Sheriff election) Werewolf game immediately.
+/// Single-device demo transport with smart AI bots for BOTH Werewolf (6/9/12p)
+/// and Guandan (4p Red vs Blue), so one player can test any game solo immediately.
 class LocalDemoTransport implements GameTransport {
   LocalDemoTransport({
     required String playerName,
-    WerewolfConfig? initialConfig,
+    GameType gameType = GameType.werewolf,
+    WerewolfConfig? werewolfConfig,
+    GuandanConfig? guandanConfig,
     Random? random,
   }) : _random = random ?? Random() {
-    final config = initialConfig ?? WerewolfConfig.preset6();
     _controller = RoomController(
       roomId: 'demo_room',
       roomCode: 'DEMO',
-      gameType: GameType.werewolf,
-      registry: GamePluginRegistry([WerewolfPlugin(random: _random)]),
+      gameType: gameType,
+      registry: GamePluginRegistry([
+        WerewolfPlugin(random: _random),
+        GuandanPlugin(random: _random),
+      ]),
       random: _random,
     );
     final me = _controller.joinPlayer(name: playerName);
     _humanId = me.playerId;
-    _controller.updateConfig(_humanId, config.toJson());
-    _syncBotsToConfig(config);
+
+    if (gameType == GameType.werewolf) {
+      final cfg = werewolfConfig ?? WerewolfConfig.preset6();
+      _controller.updateConfig(_humanId, cfg.toJson());
+      _syncBotsToCount(cfg.totalPlayers);
+    } else if (gameType == GameType.guandan) {
+      final cfg = guandanConfig ?? const GuandanConfig();
+      _controller.updateConfig(_humanId, cfg.toJson());
+      _syncBotsToCount(4);
+    }
 
     scheduleMicrotask(() {
       _emitSnapshot(includeToken: true);
@@ -65,8 +77,7 @@ class LocalDemoTransport implements GameTransport {
         label: '单人 AI 演示模式',
       );
 
-  void _syncBotsToConfig(WerewolfConfig config) {
-    final desired = config.totalPlayers;
+  void _syncBotsToCount(int desired) {
     while (_controller.players.length > desired) {
       final hasBot = _controller.players.any((p) => p.isBot);
       if (!hasBot) break;
@@ -91,7 +102,8 @@ class LocalDemoTransport implements GameTransport {
     ];
     while (_controller.players.length < desired) {
       final idx = _controller.players.length - 1;
-      final label = idx < botNames.length ? '${botNames[idx]}(AI)' : 'AI玩家${idx + 2}';
+      final label =
+          idx < botNames.length ? '${botNames[idx]}(AI)' : 'AI玩家${idx + 2}';
       _controller.joinPlayer(name: label, isBot: true);
     }
   }
@@ -107,7 +119,11 @@ class LocalDemoTransport implements GameTransport {
             message.payload['config'] as Map? ?? {},
           );
           _controller.updateConfig(_humanId, cfgMap);
-          _syncBotsToConfig(WerewolfConfig.fromJson(cfgMap));
+          if (_controller.gameType == GameType.werewolf) {
+            _syncBotsToCount(WerewolfConfig.fromJson(cfgMap).totalPlayers);
+          } else if (_controller.gameType == GameType.guandan) {
+            _syncBotsToCount(4);
+          }
         case ClientMessageType.toggleReady:
           _controller.toggleReady(_humanId);
         case ClientMessageType.startGame:
@@ -141,14 +157,164 @@ class LocalDemoTransport implements GameTransport {
   void _scheduleBotStep() {
     _botTimer?.cancel();
     if (_closed || _controller.status != RoomStatus.playing) return;
-    _botTimer = Timer(const Duration(milliseconds: 850), _runBotDecisions);
+    final delay = _controller.gameType == GameType.guandan
+        ? const Duration(milliseconds: 700)
+        : const Duration(milliseconds: 850);
+    _botTimer = Timer(delay, _runBotDecisions);
   }
 
   void _runBotDecisions() {
     if (_closed || _controller.status != RoomStatus.playing) return;
     final raw = _controller.rawGameState;
-    if (raw is! WerewolfState) return;
+    if (raw is WerewolfState) {
+      _runWerewolfBots(raw);
+    } else if (raw is GuandanState) {
+      _runGuandanBots(raw);
+    }
+  }
 
+  void _runGuandanBots(GuandanState state) {
+    final events = <GameEvent>[];
+    var progressed = false;
+
+    try {
+      switch (state.phase) {
+        case GuandanPhase.tributePay:
+          for (final t in state.tributes) {
+            if (t.tributedCard == null && _isBot(t.fromPlayerId)) {
+              final payer = state.playerById(t.fromPlayerId)!;
+              final eligible = payer.hand
+                  .where((c) => !c.isWildcard(state.currentLevel))
+                  .toList()
+                ..sort((a, b) => b
+                    .strength(state.currentLevel)
+                    .compareTo(a.strength(state.currentLevel)));
+              if (eligible.isNotEmpty) {
+                events.addAll(_controller.handleGameAction(
+                  t.fromPlayerId,
+                  GuandanActionType.payTribute,
+                  {'cardId': eligible.first.id},
+                ));
+                progressed = true;
+                break;
+              }
+            }
+          }
+
+        case GuandanPhase.tributeReturn:
+          for (final t in state.tributes) {
+            if (t.returnedCard == null && _isBot(t.toPlayerId)) {
+              final returner = state.playerById(t.toPlayerId)!;
+              final under10 = returner.hand
+                  .where((c) =>
+                      !c.isJoker &&
+                      !c.isLevelCard(state.currentLevel) &&
+                      c.rank <= 10)
+                  .toList()
+                ..sort((a, b) => a.rank.compareTo(b.rank));
+              final pick = under10.isNotEmpty ? under10.first : returner.hand.last;
+              events.addAll(_controller.handleGameAction(
+                t.toPlayerId,
+                GuandanActionType.returnTribute,
+                {'cardId': pick.id},
+              ));
+              progressed = true;
+              break;
+            }
+          }
+
+        case GuandanPhase.playing:
+          final current = state.currentTurnPlayer;
+          if (!_isBot(current.playerId)) return;
+
+          final isLeading = state.lastPlay == null ||
+              state.lastPlayPlayerId == current.playerId;
+
+          if (isLeading) {
+            final hints = GuandanEvaluator.findHintPlays(
+              current.hand,
+              state.currentLevel,
+            );
+            // Prefer non-bomb multi-card hands first to shed cleanly
+            final nonBombs = hints.where((h) => !h.isBomb).toList();
+            GuandanPlay chosen;
+            if (nonBombs.isNotEmpty) {
+              final multi = nonBombs.where((h) => h.length >= 2).toList();
+              chosen = multi.isNotEmpty ? multi.first : nonBombs.first;
+            } else {
+              chosen = hints.first;
+            }
+            events.addAll(_controller.handleGameAction(
+              current.playerId,
+              GuandanActionType.playCards,
+              {'cardIds': chosen.cards.map((c) => c.id).toList()},
+            ));
+            progressed = true;
+          } else {
+            final lastPlayer = state.playerById(state.lastPlayPlayerId!)!;
+            final isTeammateLeading = lastPlayer.teamIndex == current.teamIndex;
+            final lastPlay = state.lastPlay!;
+
+            // Smart teammate awareness: let partner hold strong tricks
+            if (isTeammateLeading &&
+                (lastPlay.isBomb ||
+                    lastPlay.primaryValue >= 13 ||
+                    lastPlayer.hand.length <= 6)) {
+              events.addAll(_controller.handleGameAction(
+                current.playerId,
+                GuandanActionType.passTurn,
+                const {},
+              ));
+              progressed = true;
+            } else {
+              final hints = GuandanEvaluator.findHintPlays(
+                current.hand,
+                state.currentLevel,
+                beatTarget: lastPlay,
+              );
+              final nonBombs = hints.where((h) => !h.isBomb).toList();
+              GuandanPlay? chosen;
+              if (nonBombs.isNotEmpty) {
+                chosen = nonBombs.first;
+              } else if (hints.isNotEmpty &&
+                  !isTeammateLeading &&
+                  (lastPlayer.hand.length <= 8 ||
+                      current.hand.length <= 7 ||
+                      lastPlay.length >= 5)) {
+                chosen = hints.first;
+              }
+
+              if (chosen != null) {
+                events.addAll(_controller.handleGameAction(
+                  current.playerId,
+                  GuandanActionType.playCards,
+                  {'cardIds': chosen.cards.map((c) => c.id).toList()},
+                ));
+              } else {
+                events.addAll(_controller.handleGameAction(
+                  current.playerId,
+                  GuandanActionType.passTurn,
+                  const {},
+                ));
+              }
+              progressed = true;
+            }
+          }
+
+        case GuandanPhase.roundOver:
+        case GuandanPhase.matchOver:
+          break;
+      }
+    } catch (_) {}
+
+    if (progressed) {
+      _emitSnapshot();
+      _emitEvents(events);
+      _scheduleBotStep();
+    }
+  }
+
+  void _runWerewolfBots(WerewolfState raw) {
     final allEvents = <GameEvent>[];
     var progressed = false;
 
@@ -195,15 +361,17 @@ class LocalDemoTransport implements GameTransport {
         case WerewolfPhase.nightWolf:
           final aliveWolves = raw.aliveWithRole(WerewolfRole.werewolf);
           final botWolves = aliveWolves
-              .where((w) => _isBot(w.playerId) && !raw.wolfConfirmedIds.contains(w.playerId))
+              .where((w) =>
+                  _isBot(w.playerId) &&
+                  !raw.wolfConfirmedIds.contains(w.playerId))
               .toList();
           if (botWolves.isNotEmpty) {
-            final nonWolves = raw.alivePlayers.where((p) => !p.role.isWolf).toList();
+            final nonWolves =
+                raw.alivePlayers.where((p) => !p.role.isWolf).toList();
             final target = nonWolves.isEmpty
                 ? null
                 : nonWolves[_random.nextInt(nonWolves.length)].playerId;
             for (final bw in botWolves) {
-              // Re-check phase in case previous bot confirmation advanced the night
               if ((_controller.rawGameState as WerewolfState).phase !=
                   WerewolfPhase.nightWolf) {
                 break;
@@ -231,7 +399,8 @@ class LocalDemoTransport implements GameTransport {
               final canSave = !raw.witchAntidoteUsed &&
                   raw.currentNightWolfTargetId != null &&
                   (raw.currentNightWolfTargetId != witch.playerId ||
-                      (raw.dayNumber == 1 && raw.config.witchSelfSaveFirstNight));
+                      (raw.dayNumber == 1 &&
+                          raw.config.witchSelfSaveFirstNight));
               if (canSave && raw.dayNumber == 1) {
                 allEvents.addAll(_controller.handleGameAction(
                   witch.playerId,
@@ -268,7 +437,10 @@ class LocalDemoTransport implements GameTransport {
                   allEvents.addAll(_controller.handleGameAction(
                     seer.playerId,
                     WerewolfActionType.seerCheck,
-                    {'targetId': targets[_random.nextInt(targets.length)].playerId},
+                    {
+                      'targetId':
+                          targets[_random.nextInt(targets.length)].playerId
+                    },
                   ));
                 }
               }
@@ -288,7 +460,6 @@ class LocalDemoTransport implements GameTransport {
               break;
             }
             if (p.isBot && !raw.sheriffSignupDecidedIds.contains(p.id)) {
-              // About 25% of bots run for sheriff
               final join = _random.nextInt(4) == 0;
               allEvents.addAll(_controller.handleGameAction(
                 p.id,
@@ -365,7 +536,8 @@ class LocalDemoTransport implements GameTransport {
             if (_isBot(p.playerId) &&
                 p.canVote &&
                 !raw.dayVotes.containsKey(p.playerId)) {
-              final choices = candidates.where((c) => c.playerId != p.playerId).toList();
+              final choices =
+                  candidates.where((c) => c.playerId != p.playerId).toList();
               final pick = choices.isEmpty
                   ? null
                   : choices[_random.nextInt(choices.length)].playerId;

@@ -67,7 +67,7 @@ class LanHostGameTransport implements GameTransport {
   }) async {
     final random = Random();
     final roomCode = (1000 + random.nextInt(9000)).toString();
-    final registry = GamePluginRegistry([WerewolfPlugin()]);
+    final registry = GamePluginRegistry([WerewolfPlugin(), GuandanPlugin()]);
     final controller = RoomController(
       roomId: 'lan_$roomCode',
       roomCode: roomCode,

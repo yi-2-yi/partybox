@@ -15,9 +15,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('PartyBox'), findsOneWidget);
+    expect(find.text('掼蛋 · 聚会无线牌局'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('一夜终极狼人'), 200);
     expect(find.text('狼人杀 · 智能聚会法官'), findsOneWidget);
     expect(find.text('一夜终极狼人'), findsOneWidget);
-    expect(find.text('掼蛋'), findsOneWidget);
 
     // Start 12-player demo with sheriff enabled by default
     await ctrl.startLocalDemo(preset: WerewolfConfig.preset12Idiot());
@@ -87,5 +88,46 @@ void main() {
     await client.connect();
     final snap = await clientSnapFuture.timeout(const Duration(seconds: 5));
     expect(snap.players.map((p) => p.name), containsAll(['房主手机', '朋友手机']));
+  });
+
+  testWidgets('Guandan Demo Lobby -> Deal 27 cards -> Hint & Play flow', (tester) async {
+    final ctrl = AppController(narrator: NarratorService(enabled: false));
+    addTearDown(ctrl.dispose);
+
+    await tester.pumpWidget(PartyBoxApp(controller: ctrl));
+    await tester.pumpAndSettle();
+
+    await ctrl.startGuandanDemo(config: const GuandanConfig(startLevel: 2));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('掼蛋大厅'), findsOneWidget);
+    expect(find.textContaining('已入座玩家（4 / 4）'), findsOneWidget);
+    expect(find.textContaining('开始发牌（4人掼蛋 · 打 2 起）'), findsOneWidget);
+
+    await tester.tap(find.textContaining('开始发牌'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.textContaining('掼蛋 · 第 1 局 · 打 2'), findsOneWidget);
+    expect((ctrl.snapshot!.gameState!['myHand'] as List).length, 27);
+
+    // Let AI bots take turns until it becomes human's turn
+    for (var i = 0; i < 6; i++) {
+      if (ctrl.snapshot!.gameState!['isMyTurn'] == true) break;
+      await tester.pump(const Duration(milliseconds: 800));
+    }
+
+    if (ctrl.snapshot!.gameState!['isMyTurn'] == true) {
+      await tester.tap(find.text('提示'));
+      await tester.pump();
+      await tester.tap(find.text('出牌'));
+      await tester.pump();
+      expect((ctrl.snapshot!.gameState!['myHand'] as List).length, lessThan(27));
+    }
+
+    await tester.runAsync(() async {
+      await ctrl.leaveRoom();
+    });
+    await tester.pump();
   });
 }

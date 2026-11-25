@@ -89,7 +89,7 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 8),
               const Text(
-                '请先连上房主的手机热点或同一个 Wi-Fi，下方会自动搜索附近房间。',
+                '请先连上房主的手机热点或同一个 Wi-Fi，下方会自动搜索附近所有桌游房间（狼人杀 / 掼蛋）。',
                 style: TextStyle(color: PartyColors.textSecondary, fontSize: 13),
               ),
               const SizedBox(height: 16),
@@ -139,8 +139,12 @@ class _HomePageState extends State<HomePage> {
                                   Icons.meeting_room,
                                   color: PartyColors.gold,
                                 ),
-                                title: Text('${r.hostName}的${r.gameName}房 (${r.roomCode})'),
-                                subtitle: Text('${r.ip}:${r.port} · ${r.playerCount}人'),
+                                title: Text(
+                                  '${r.hostName}的${r.gameName}房 (${r.roomCode})',
+                                ),
+                                subtitle: Text(
+                                  '${r.ip}:${r.port} · ${r.playerCount}/${r.maxPlayers}人',
+                                ),
                                 trailing: ElevatedButton(
                                   onPressed: () {
                                     Navigator.pop(ctx);
@@ -191,8 +195,9 @@ class _HomePageState extends State<HomePage> {
     await discovery.dispose();
   }
 
-  Future<void> _showOnlineSheet() async {
-    final serverCtrl = TextEditingController(text: widget.controller.onlineServerUrl);
+  Future<void> _showOnlineSheet(GameType gameType) async {
+    final serverCtrl =
+        TextEditingController(text: widget.controller.onlineServerUrl);
     final codeCtrl = TextEditingController();
 
     await showModalBottomSheet<void>(
@@ -214,13 +219,16 @@ class _HomePageState extends State<HomePage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Row(
                 children: [
-                  Icon(Icons.cloud_outlined, color: PartyColors.seerCyan),
-                  SizedBox(width: 8),
+                  const Icon(Icons.cloud_outlined, color: PartyColors.seerCyan),
+                  const SizedBox(width: 8),
                   Text(
-                    '联网模式（远程/服务器联机）',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                    '联网模式 · ${gameType.displayName}',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
@@ -238,10 +246,13 @@ class _HomePageState extends State<HomePage> {
                 child: ElevatedButton.icon(
                   onPressed: () {
                     Navigator.pop(ctx);
-                    widget.controller.createOnlineRoom(serverUrl: serverCtrl.text);
+                    widget.controller.createOnlineRoom(
+                      serverUrl: serverCtrl.text,
+                      gameType: gameType,
+                    );
                   },
                   icon: const Icon(Icons.add_circle_outline),
-                  label: const Text('创建联网房间'),
+                  label: Text('创建${gameType.displayName}联网房间'),
                 ),
               ),
               const Padding(
@@ -253,7 +264,10 @@ class _HomePageState extends State<HomePage> {
                       padding: EdgeInsets.symmetric(horizontal: 12),
                       child: Text(
                         '或者输入房间号加入',
-                        style: TextStyle(color: PartyColors.textMuted, fontSize: 12),
+                        style: TextStyle(
+                          color: PartyColors.textMuted,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                     Expanded(child: Divider(color: PartyColors.border)),
@@ -293,7 +307,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Future<void> _showDemoPicker() async {
+  Future<void> _showWerewolfDemoPicker() async {
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: PartyColors.bgSurface,
@@ -307,15 +321,10 @@ class _HomePageState extends State<HomePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              '选择单人体验板子（AI 自动陪玩）',
+              '选择狼人杀单人体验板子（AI 陪玩）',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
-            const SizedBox(height: 6),
-            const Text(
-              '不需要其他手机即可完整试玩发牌、夜晚行动、警长竞选与投票全流程。',
-              style: TextStyle(color: PartyColors.textSecondary, fontSize: 13),
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             _DemoPresetTile(
               title: '6 人速局（2狼 2民 预女）',
               subtitle: '无警长 · 快速熟悉面杀流程',
@@ -340,6 +349,56 @@ class _HomePageState extends State<HomePage> {
                 Navigator.pop(ctx);
                 widget.controller.startLocalDemo(
                   preset: WerewolfConfig.preset12Idiot(),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showGuandanDemoPicker() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: PartyColors.bgSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '选择掼蛋单人体验模式（1人 + 3位AI）',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              '你与 3号 AI 搭档红队，对战 2号/4号 蓝队。体验逢人配、同花顺压5炸、接风与进贡还贡！',
+              style: TextStyle(color: PartyColors.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 14),
+            _DemoPresetTile(
+              title: '经典升级赛（从 2 打起，过 A 夺冠）',
+              subtitle: '双下+3级 · 单下+2级 · 开启进贡/还贡/双大王抗贡',
+              highlight: true,
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.controller.startGuandanDemo(
+                  config: const GuandanConfig(startLevel: 2, targetLevel: 14),
+                );
+              },
+            ),
+            _DemoPresetTile(
+              title: '快速过 A 决胜局（直接打 A）',
+              subtitle: '红桃 A 逢人配 · 一局定胜负快速爽玩',
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.controller.startGuandanDemo(
+                  config: const GuandanConfig(startLevel: 14, targetLevel: 14),
                 );
               },
             ),
@@ -444,167 +503,264 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
 
+                const SizedBox(height: 18),
+
+                if (ctrl.isBusy)
+                  const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else ...[
+                  // Card 1: Guandan (NEW!)
+                  _GameHeroCard(
+                    badgeText: '新上线 · 4人双副牌搭档',
+                    badgeColor: PartyColors.guardGreen,
+                    icon: Icons.style_rounded,
+                    gradientColors: const [Color(0xFF103630), Color(0xFF0E1B24)],
+                    borderColor: PartyColors.guardGreen.withValues(alpha: 0.55),
+                    title: '掼蛋 · 聚会无线牌局',
+                    description:
+                        '108 张双副牌、1/3 红队 vs 2/4 蓝队、红桃逢人配百搭、同花顺压 5 炸、天王炸、接风、双下 +3 级与进贡还贡抗贡。',
+                    primaryButtonLabel: '局域网 / 热点建房（4人无网打掼蛋）',
+                    onLanHost: () =>
+                        ctrl.startLanHost(gameType: GameType.guandan),
+                    onLanJoin: _showLanJoinSheet,
+                    onOnline: () => _showOnlineSheet(GameType.guandan),
+                    demoLabel: '单人快速体验掼蛋（AI 搭档与对手）',
+                    onDemo: _showGuandanDemoPicker,
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Card 2: Werewolf
+                  _GameHeroCard(
+                    badgeText: '已上线 · 6–12人面杀模式',
+                    badgeColor: PartyColors.gold,
+                    icon: Icons.nightlight_round,
+                    gradientColors: const [Color(0xFF232F55), Color(0xFF131B31)],
+                    borderColor: PartyColors.gold.withValues(alpha: 0.45),
+                    title: '狼人杀 · 智能聚会法官',
+                    description:
+                        '长按防偷窥发牌、天黑语音播报、狼人互认刀口、12人局默认警长竞选、断线秒重连。大家线下畅聊，手机自动控场！',
+                    primaryButtonLabel: '局域网 / 手机热点建房（无网也能玩）',
+                    onLanHost: () =>
+                        ctrl.startLanHost(gameType: GameType.werewolf),
+                    onLanJoin: _showLanJoinSheet,
+                    onOnline: () => _showOnlineSheet(GameType.werewolf),
+                    demoLabel: '单人快速体验狼人杀（AI 陪玩 · 含 12 人警长局）',
+                    onDemo: _showWerewolfDemoPicker,
+                  ),
+                ],
+
                 const SizedBox(height: 22),
 
-                // Featured Game Card: Werewolf
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(24),
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xFF232F55), Color(0xFF131B31)],
-                    ),
-                    border: Border.all(
-                      color: PartyColors.gold.withValues(alpha: 0.45),
-                      width: 1.4,
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: PartyColors.goldSoft,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: const Text(
-                              '第一期已上线 · 面杀模式',
-                              style: TextStyle(
-                                color: PartyColors.gold,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          const Spacer(),
-                          const Icon(
-                            Icons.nightlight_round,
-                            color: PartyColors.gold,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      const Text(
-                        '狼人杀 · 智能聚会法官',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        '长按防偷窥发牌、天黑语音播报、狼人互认刀口、12人局默认警长竞选、断线秒重连。大家线下畅聊，手机自动控场！',
-                        style: TextStyle(
-                          color: PartyColors.textSecondary,
-                          fontSize: 13.5,
-                          height: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      if (ctrl.isBusy)
-                        const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(12),
-                            child: CircularProgressIndicator(),
-                          ),
-                        )
-                      else ...[
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: () => ctrl.startLanHost(),
-                            icon: const Icon(Icons.wifi_tethering),
-                            label: const Text('局域网 / 手机热点建房（无网也能玩）'),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: _showLanJoinSheet,
-                                icon: const Icon(Icons.radar, size: 18),
-                                label: const Text('加入局域网房'),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: _showOnlineSheet,
-                                icon: const Icon(Icons.cloud_outlined, size: 18),
-                                label: const Text('联网模式'),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        SizedBox(
-                          width: double.infinity,
-                          child: TextButton.icon(
-                            onPressed: _showDemoPicker,
-                            icon: const Icon(
-                              Icons.smart_toy_outlined,
-                              color: PartyColors.seerCyan,
-                            ),
-                            label: const Text(
-                              '单人快速体验（AI 陪玩 · 含 12 人警长局）',
-                              style: TextStyle(
-                                color: PartyColors.seerCyan,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
                 const Text(
-                  '桌游合集路线图（共享同一联机底座）',
+                  '更多桌游（共享同一联机底座）',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: PartyColors.textSecondary,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
 
-                Row(
-                  children: [
-                    Expanded(
-                      child: _ComingSoonCard(
-                        icon: Icons.dark_mode,
-                        accent: PartyColors.witchPurple,
-                        title: '一夜终极狼人',
-                        subtitle: '3–10人 · 10分钟快局\n换牌与推理，无淘汰',
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: PartyColors.bgCard,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: PartyColors.border),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.dark_mode,
+                        color: PartyColors.witchPurple,
+                        size: 26,
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _ComingSoonCard(
-                        icon: Icons.style,
-                        accent: PartyColors.guardGreen,
-                        title: '掼蛋',
-                        subtitle: '4人双搭档 · 级牌逢人配\n随时开局线下无线联机',
+                      const SizedBox(width: 14),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '一夜终极狼人',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              '3–10人 · 10分钟快局 · 换牌与推理，无淘汰',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: PartyColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: PartyColors.bgElevated,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: const Text(
+                          '下一期规划',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: PartyColors.textMuted,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _GameHeroCard extends StatelessWidget {
+  const _GameHeroCard({
+    required this.badgeText,
+    required this.badgeColor,
+    required this.icon,
+    required this.gradientColors,
+    required this.borderColor,
+    required this.title,
+    required this.description,
+    required this.primaryButtonLabel,
+    required this.onLanHost,
+    required this.onLanJoin,
+    required this.onOnline,
+    required this.demoLabel,
+    required this.onDemo,
+  });
+
+  final String badgeText;
+  final Color badgeColor;
+  final IconData icon;
+  final List<Color> gradientColors;
+  final Color borderColor;
+  final String title;
+  final String description;
+  final String primaryButtonLabel;
+  final VoidCallback onLanHost;
+  final VoidCallback onLanJoin;
+  final VoidCallback onOnline;
+  final String demoLabel;
+  final VoidCallback onDemo;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: gradientColors,
+        ),
+        border: Border.all(color: borderColor, width: 1.4),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: badgeColor.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  badgeText,
+                  style: TextStyle(
+                    color: badgeColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Icon(icon, color: badgeColor),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            description,
+            style: const TextStyle(
+              color: PartyColors.textSecondary,
+              fontSize: 13,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onLanHost,
+              icon: const Icon(Icons.wifi_tethering),
+              label: Text(primaryButtonLabel),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onLanJoin,
+                  icon: const Icon(Icons.radar, size: 18),
+                  label: const Text('加入局域网房'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onOnline,
+                  icon: const Icon(Icons.cloud_outlined, size: 18),
+                  label: const Text('联网模式'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton.icon(
+              onPressed: onDemo,
+              icon: const Icon(
+                Icons.smart_toy_outlined,
+                color: PartyColors.seerCyan,
+              ),
+              label: Text(
+                demoLabel,
+                style: const TextStyle(
+                  color: PartyColors.seerCyan,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -641,68 +797,6 @@ class _DemoPresetTile extends StatelessWidget {
         ),
         trailing: const Icon(Icons.play_arrow_rounded, color: PartyColors.gold),
         onTap: onTap,
-      ),
-    );
-  }
-}
-
-class _ComingSoonCard extends StatelessWidget {
-  const _ComingSoonCard({
-    required this.icon,
-    required this.accent,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final IconData icon;
-  final Color accent;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: PartyColors.bgCard,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: PartyColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: accent, size: 22),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: PartyColors.bgElevated,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: const Text(
-                  '规划中',
-                  style: TextStyle(fontSize: 11, color: PartyColors.textMuted),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            title,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: const TextStyle(
-              fontSize: 12,
-              color: PartyColors.textSecondary,
-              height: 1.4,
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -94,7 +94,29 @@ class AppController extends ChangeNotifier {
     try {
       final transport = LocalDemoTransport(
         playerName: nickname,
-        initialConfig: preset ?? WerewolfConfig.preset6(),
+        gameType: GameType.werewolf,
+        werewolfConfig: preset ?? WerewolfConfig.preset6(),
+      );
+      _attachTransport(transport);
+    } catch (e) {
+      lastError = e.toString();
+    } finally {
+      isBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> startGuandanDemo({GuandanConfig? config}) async {
+    await _resetConnection();
+    isBusy = true;
+    lastError = null;
+    notifyListeners();
+
+    try {
+      final transport = LocalDemoTransport(
+        playerName: nickname,
+        gameType: GameType.guandan,
+        guandanConfig: config ?? const GuandanConfig(),
       );
       _attachTransport(transport);
     } catch (e) {
@@ -221,6 +243,13 @@ class AppController extends ChangeNotifier {
   }
 
   void updateConfig(WerewolfConfig config) {
+    _transport?.send(ClientMessage(
+      type: ClientMessageType.updateConfig,
+      payload: {'config': config.toJson()},
+    ));
+  }
+
+  void updateGuandanConfig(GuandanConfig config) {
     _transport?.send(ClientMessage(
       type: ClientMessageType.updateConfig,
       payload: {'config': config.toJson()},
