@@ -629,6 +629,61 @@ void main() {
       // Return to lobby resets status
       room.returnToLobby(joins.first.playerId);
       expect(room.status, RoomStatus.lobby);
+
+      // Update profile avatar & nickname in lobby
+      room.updateProfile(joins.first.playerId, name: '狐狸大哥', avatarIndex: 11);
+      final updatedHost = room.players.firstWhere((p) => p.id == joins.first.playerId);
+      expect(updatedHost.name, '狐狸大哥');
+      expect(updatedHost.avatarIndex, 11);
+    });
+
+    test('records detailed voteHistory visible to all players when enabled, and hides it when disabled', () {
+      for (final enabled in [true, false]) {
+        final engine = WerewolfEngine(random: Random(7));
+        final cfg = WerewolfConfig.preset6().copyWith(recordVoteHistory: enabled);
+        var state = engine.initGame(_makePlayers(6), cfg).state;
+        state = _confirmAllRoles(engine, state);
+
+        // Skip night -> dawn -> discuss -> dayVote via hostAdvance
+        while (state.phase != WerewolfPhase.dayVote) {
+          state = engine
+              .handleAction(
+                state,
+                'p1',
+                WerewolfActionType.hostAdvance,
+                const {},
+                hostId: 'p1',
+              )
+              .state;
+        }
+
+        // All 6 players vote for p2
+        for (final p in state.alivePlayers) {
+          state = engine
+              .handleAction(
+                state,
+                p.playerId,
+                WerewolfActionType.dayVote,
+                {'targetId': 'p2'},
+                hostId: 'p1',
+              )
+              .state;
+        }
+
+        expect(state.phase, WerewolfPhase.voteResult);
+        final viewForP3 = engine.projectStateForPlayer(state, 'p3');
+        expect(viewForP3['recordVoteHistory'], enabled);
+        final history = (viewForP3['voteHistory'] as List);
+        if (enabled) {
+          expect(history.length, 1);
+          final round = history.first as Map<String, dynamic>;
+          final ballots = Map<String, dynamic>.from(round['ballots'] as Map);
+          expect(ballots['p1'], 'p2');
+          expect(ballots.length, 6);
+        } else {
+          expect(history, isEmpty);
+        }
+      }
     });
   });
 }

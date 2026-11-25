@@ -5,6 +5,7 @@ import 'game_transport.dart';
 Future<GameTransport> createLanHostTransport({
   required String hostName,
   required GameType gameType,
+  int hostAvatarIndex = 0,
   int port = 8765,
 }) {
   throw UnsupportedError(

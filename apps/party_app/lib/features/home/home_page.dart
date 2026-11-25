@@ -1,9 +1,11 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:party_core/party_core.dart';
 
+import '../../core/avatars/party_avatars.dart';
 import '../../core/discovery/lan_discovery.dart';
 import '../../core/state/app_controller.dart';
 import '../../core/theme/party_theme.dart';
+import '../settings/voice_settings_sheet.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.controller});
@@ -15,36 +17,17 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  Future<void> _editNickname() async {
-    final textCtrl = TextEditingController(text: widget.controller.nickname);
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: PartyColors.bgCard,
-        title: const Text('设置聚会昵称'),
-        content: TextField(
-          controller: textCtrl,
-          autofocus: true,
-          maxLength: 12,
-          decoration: const InputDecoration(
-            labelText: '你的昵称',
-            hintText: '例如：小明 / 阿杰',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, textCtrl.text),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
+  Future<void> _editProfile() async {
+    final result = await showProfileEditorDialog(
+      context,
+      currentName: widget.controller.nickname,
+      currentAvatarIndex: widget.controller.avatarIndex,
     );
-    if (result != null && result.trim().isNotEmpty) {
-      await widget.controller.updateNickname(result);
+    if (result != null) {
+      await widget.controller.updateProfile(
+        name: result.name,
+        avatarIndex: result.avatarIndex,
+      );
     }
   }
 
@@ -518,14 +501,22 @@ class _HomePageState extends State<HomePage> {
                         ],
                       ),
                     ),
+                    IconButton(
+                      tooltip: '法官语音设置',
+                      icon: Icon(
+                        Icons.record_voice_over,
+                        color: ctrl.ttsEnabled
+                            ? PartyColors.gold
+                            : PartyColors.textMuted,
+                      ),
+                      onPressed: () => showVoiceSettingsSheet(context, ctrl),
+                    ),
+                    const SizedBox(width: 4),
                     InkWell(
-                      onTap: _editNickname,
+                      onTap: _editProfile,
                       borderRadius: BorderRadius.circular(999),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
+                        padding: const EdgeInsets.fromLTRB(6, 5, 12, 5),
                         decoration: BoxDecoration(
                           color: PartyColors.bgCard,
                           borderRadius: BorderRadius.circular(999),
@@ -534,12 +525,11 @@ class _HomePageState extends State<HomePage> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(
-                              Icons.person_outline,
-                              size: 16,
-                              color: PartyColors.gold,
+                            PartyAvatarWidget(
+                              avatarIndex: ctrl.avatarIndex,
+                              radius: 13,
                             ),
-                            const SizedBox(width: 6),
+                            const SizedBox(width: 7),
                             Text(
                               ctrl.nickname,
                               style: const TextStyle(

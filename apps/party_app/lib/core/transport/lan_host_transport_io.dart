@@ -63,6 +63,7 @@ class LanHostGameTransport implements GameTransport {
   static Future<LanHostGameTransport> start({
     required String hostName,
     required GameType gameType,
+    int hostAvatarIndex = 0,
     int port = 8765,
   }) async {
     final random = Random();
@@ -78,7 +79,10 @@ class LanHostGameTransport implements GameTransport {
       gameType: gameType,
       registry: registry,
     );
-    final hostJoin = controller.joinPlayer(name: hostName);
+    final hostJoin = controller.joinPlayer(
+      name: hostName,
+      avatarIndex: hostAvatarIndex,
+    );
 
     HttpServer server;
     try {
@@ -165,6 +169,7 @@ class LanHostGameTransport implements GameTransport {
           final join = controller.joinPlayer(
             name: msg.payload['name'] as String? ?? '玩家',
             preferredPlayerId: msg.payload['playerId'] as String?,
+            avatarIndex: (msg.payload['avatarIndex'] as num?)?.toInt(),
           );
           peer.playerId = join.playerId;
           _peers[join.playerId] = peer;
@@ -230,6 +235,12 @@ class LanHostGameTransport implements GameTransport {
   void _applyRoomAction(String playerId, ClientMessage msg) {
     List<GameEvent> emittedEvents = const [];
     switch (msg.type) {
+      case ClientMessageType.updateProfile:
+        controller.updateProfile(
+          playerId,
+          name: msg.payload['name'] as String?,
+          avatarIndex: (msg.payload['avatarIndex'] as num?)?.toInt(),
+        );
       case ClientMessageType.toggleReady:
         controller.toggleReady(playerId);
       case ClientMessageType.updateConfig:
@@ -331,11 +342,13 @@ class LanHostGameTransport implements GameTransport {
 Future<GameTransport> createLanHostTransport({
   required String hostName,
   required GameType gameType,
+  int hostAvatarIndex = 0,
   int port = 8765,
 }) {
   return LanHostGameTransport.start(
     hostName: hostName,
     gameType: gameType,
+    hostAvatarIndex: hostAvatarIndex,
     port: port,
   );
 }

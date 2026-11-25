@@ -136,6 +136,7 @@ class WerewolfConfig {
     this.witchSelfSaveFirstNight = true,
     this.guardAndWitchBothKill = true,
     this.winMode = WerewolfWinMode.slaughterSide,
+    this.recordVoteHistory = true,
   });
 
   final String presetId;
@@ -144,6 +145,10 @@ class WerewolfConfig {
   final bool witchSelfSaveFirstNight;
   final bool guardAndWitchBothKill;
   final WerewolfWinMode winMode;
+
+  /// When enabled, every round's detailed vote ballots (who voted whom) are
+  /// recorded and visible to all players throughout the game.
+  final bool recordVoteHistory;
 
   int get totalPlayers =>
       roleCounts.values.fold<int>(0, (sum, count) => sum + count);
@@ -206,6 +211,7 @@ class WerewolfConfig {
     bool? witchSelfSaveFirstNight,
     bool? guardAndWitchBothKill,
     WerewolfWinMode? winMode,
+    bool? recordVoteHistory,
   }) {
     return WerewolfConfig(
       presetId: presetId ?? this.presetId,
@@ -216,6 +222,7 @@ class WerewolfConfig {
       guardAndWitchBothKill:
           guardAndWitchBothKill ?? this.guardAndWitchBothKill,
       winMode: winMode ?? this.winMode,
+      recordVoteHistory: recordVoteHistory ?? this.recordVoteHistory,
     );
   }
 
@@ -228,6 +235,7 @@ class WerewolfConfig {
         'witchSelfSaveFirstNight': witchSelfSaveFirstNight,
         'guardAndWitchBothKill': guardAndWitchBothKill,
         'winMode': winMode.name,
+        'recordVoteHistory': recordVoteHistory,
       };
 
   factory WerewolfConfig.fromJson(Map<String, dynamic> json) {
@@ -253,6 +261,7 @@ class WerewolfConfig {
       winMode: WerewolfWinMode.fromName(
         json['winMode'] as String? ?? WerewolfWinMode.slaughterSide.name,
       ),
+      recordVoteHistory: json['recordVoteHistory'] as bool? ?? true,
     );
   }
 }
@@ -264,6 +273,7 @@ class WerewolfPlayerState {
     required this.name,
     required this.seatNumber,
     required this.role,
+    this.avatarIndex = 0,
     this.isAlive = true,
     this.deathReason,
     this.deathDay,
@@ -275,6 +285,7 @@ class WerewolfPlayerState {
   final String name;
   final int seatNumber;
   final WerewolfRole role;
+  final int avatarIndex;
   final bool isAlive;
   final DeathReason? deathReason;
   final int? deathDay;
@@ -293,6 +304,7 @@ class WerewolfPlayerState {
       name: name,
       seatNumber: seatNumber,
       role: role,
+      avatarIndex: avatarIndex,
       isAlive: isAlive ?? this.isAlive,
       deathReason: deathReason ?? this.deathReason,
       deathDay: deathDay ?? this.deathDay,
@@ -300,6 +312,36 @@ class WerewolfPlayerState {
       canVote: canVote ?? this.canVote,
     );
   }
+}
+
+/// Recorded vote breakdown for a single voting round (Sheriff or Day Exile).
+class VoteRoundRecord {
+  const VoteRoundRecord({
+    required this.dayNumber,
+    required this.roundLabel,
+    required this.ballots,
+    required this.summary,
+    this.isSheriffVote = false,
+    this.sheriffId,
+  });
+
+  final int dayNumber;
+  final String roundLabel;
+
+  /// `voterId -> targetId` (`null` means abstain / 弃票).
+  final Map<String, String?> ballots;
+  final String summary;
+  final bool isSheriffVote;
+  final String? sheriffId;
+
+  Map<String, dynamic> toJson() => {
+        'dayNumber': dayNumber,
+        'roundLabel': roundLabel,
+        'ballots': ballots,
+        'summary': summary,
+        'isSheriffVote': isSheriffVote,
+        if (sheriffId != null) 'sheriffId': sheriffId,
+      };
 }
 
 class SeerCheckRecord {
@@ -384,6 +426,7 @@ class WerewolfState {
     this.votePkRound = 0,
     this.lastVoteTally = const {},
     this.lastVoteSummary = '',
+    this.voteHistory = const [],
     this.winnerCamp,
     this.winReason,
     this.logs = const [],
@@ -440,6 +483,7 @@ class WerewolfState {
   final int votePkRound;
   final Map<String, double> lastVoteTally;
   final String lastVoteSummary;
+  final List<VoteRoundRecord> voteHistory;
 
   // End game
   final String? winnerCamp; // 'good' | 'wolf'
@@ -503,6 +547,7 @@ class WerewolfState {
     int? votePkRound,
     Map<String, double>? lastVoteTally,
     String? lastVoteSummary,
+    List<VoteRoundRecord>? voteHistory,
     String? winnerCamp,
     String? winReason,
     List<GameLogEntry>? logs,
@@ -564,6 +609,7 @@ class WerewolfState {
       votePkRound: votePkRound ?? this.votePkRound,
       lastVoteTally: lastVoteTally ?? this.lastVoteTally,
       lastVoteSummary: lastVoteSummary ?? this.lastVoteSummary,
+      voteHistory: voteHistory ?? this.voteHistory,
       winnerCamp: winnerCamp ?? this.winnerCamp,
       winReason: winReason ?? this.winReason,
       logs: logs ?? this.logs,

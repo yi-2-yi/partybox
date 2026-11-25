@@ -10,20 +10,24 @@ import '../transport/lan_host_transport.dart';
 import '../transport/local_demo_transport.dart';
 import '../transport/websocket_transport.dart';
 
-/// Top-level reactive controller managing the user's profile, active room
-/// transport, snapshot state, narrator TTS, and error banners.
+/// Top-level reactive controller managing the user's profile (nickname & avatar),
+/// custom narrator voice settings, active room transport, and room snapshot state.
 class AppController extends ChangeNotifier {
   AppController({NarratorService? narrator})
-      : narrator = narrator ?? NarratorService();
+      : narrator = narrator ?? NarratorService(),
+        voiceSettings = (narrator ?? NarratorService()).settings;
 
   static const _kNicknameKey = 'partybox_nickname';
+  static const _kAvatarKey = 'partybox_avatar_index';
   static const _kServerUrlKey = 'partybox_server_url';
+  static const _kVoiceSettingsKey = 'partybox_voice_settings';
 
   final NarratorService narrator;
 
   String nickname = '玩家小明';
+  int avatarIndex = 0;
   String onlineServerUrl = 'ws://127.0.0.1:8080/ws';
-  bool ttsEnabled = true;
+  VoiceSettings voiceSettings;
 
   GameTransport? _transport;
   StreamSubscription<RoomSnapshot>? _snapSub;
@@ -37,6 +41,7 @@ class AppController extends ChangeNotifier {
   GameEvent? latestEvent;
   bool isBusy = false;
 
+  bool get ttsEnabled => voiceSettings.enabled;
   TransportEndpointInfo? get endpointInfo => _transport?.endpointInfo;
   bool get inRoom => snapshot != null;
 
@@ -44,21 +49,49 @@ class AppController extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       nickname = prefs.getString(_kNicknameKey) ?? nickname;
+      avatarIndex = prefs.getInt(_kAvatarKey) ?? avatarIndex;
       onlineServerUrl = prefs.getString(_kServerUrlKey) ?? onlineServerUrl;
+      final savedVoice = prefs.getString(_kVoiceSettingsKey);
+      if (savedVoice != null) {
+        voiceSettings = VoiceSettings.decodeOrDefault(savedVoice);
+        await narrator.applySettings(voiceSettings);
+      }
       notifyListeners();
     } catch (_) {}
   }
 
-  Future<void> updateNickname(String value) async {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return;
-    nickname = trimmed;
+  Future<void> updateProfile({
+    String? name,
+    int? avatarIndex,
+  }) async {
+    final trimmed = name?.trim();
+    if (trimmed != null && trimmed.isNotEmpty) {
+      nickname = trimmed;
+    }
+    if (avatarIndex != null) {
+      this.avatarIndex = avatarIndex;
+    }
+
+    // Live-sync profile changes if currently in a room lobby
+    if (snapshot != null && snapshot!.status == RoomStatus.lobby) {
+      _transport?.send(ClientMessage(
+        type: ClientMessageType.updateProfile,
+        payload: {
+          'name': nickname,
+          'avatarIndex': this.avatarIndex,
+        },
+      ));
+    }
+
     notifyListeners();
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_kNicknameKey, trimmed);
+      await prefs.setString(_kNicknameKey, nickname);
+      await prefs.setInt(_kAvatarKey, this.avatarIndex);
     } catch (_) {}
   }
+
+  Future<void> updateNickname(String value) => updateProfile(name: value);
 
   Future<void> updateOnlineServerUrl(String value) async {
     final trimmed = value.trim();
@@ -71,13 +104,18 @@ class AppController extends ChangeNotifier {
     } catch (_) {}
   }
 
-  void toggleTts() {
-    ttsEnabled = !ttsEnabled;
-    narrator.enabled = ttsEnabled;
-    if (!ttsEnabled) {
-      narrator.stop();
-    }
+  Future<void> updateVoiceSettings(VoiceSettings next) async {
+    voiceSettings = next;
+    await narrator.applySettings(next);
     notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kVoiceSettingsKey, next.encode());
+    } catch (_) {}
+  }
+
+  void toggleTts() {
+    updateVoiceSettings(voiceSettings.copyWith(enabled: !voiceSettings.enabled));
   }
 
   void clearError() {
@@ -94,6 +132,7 @@ class AppController extends ChangeNotifier {
     try {
       final transport = LocalDemoTransport(
         playerName: nickname,
+        playerAvatarIndex: avatarIndex,
         gameType: GameType.werewolf,
         werewolfConfig: preset ?? WerewolfConfig.preset6(),
       );
@@ -115,6 +154,7 @@ class AppController extends ChangeNotifier {
     try {
       final transport = LocalDemoTransport(
         playerName: nickname,
+        playerAvatarIndex: avatarIndex,
         gameType: GameType.guandan,
         guandanConfig: config ?? const GuandanConfig(),
       );
@@ -136,6 +176,7 @@ class AppController extends ChangeNotifier {
     try {
       final transport = LocalDemoTransport(
         playerName: nickname,
+        playerAvatarIndex: avatarIndex,
         gameType: GameType.oneNight,
         oneNightConfig: preset ?? OneNightConfig.preset5(),
       );
@@ -157,6 +198,7 @@ class AppController extends ChangeNotifier {
     try {
       final transport = await createLanHostTransport(
         hostName: nickname,
+        hostAvatarIndex: avatarIndex,
         gameType: gameType,
       );
       _attachTransport(transport);
@@ -181,12 +223,15 @@ class AppController extends ChangeNotifier {
         mode: ConnectionMode.lanClient,
         initialMessage: ClientMessage(
           type: ClientMessageType.joinRoom,
-          payload: {'name': nickname},
+          payload: {
+            'name': nickname,
+            'avatarIndex': avatarIndex,
+          },
         ),
       );
       _attachTransport(transport);
       await transport.connect();
-    } catch (e) {
+    } catch (_) {
       await _resetConnection();
       lastError = '连接局域网房间失败，请确认双方在同一 Wi-Fi 或手机热点下，且地址正确。';
     } finally {
@@ -215,6 +260,7 @@ class AppController extends ChangeNotifier {
           payload: {
             'gameType': gameType.name,
             'name': nickname,
+            'avatarIndex': avatarIndex,
           },
         ),
       );
@@ -249,6 +295,7 @@ class AppController extends ChangeNotifier {
           payload: {
             'roomCode': roomCode.trim(),
             'name': nickname,
+            'avatarIndex': avatarIndex,
           },
         ),
       );
@@ -335,14 +382,11 @@ class AppController extends ChangeNotifier {
 
     _eventSub = transport.events.listen((ev) {
       latestEvent = ev;
-      // In-person smart moderator: speak TTS on Host / Demo device by default
-      // so multiple phones don't echo at the same table.
-      final shouldSpeak = ttsEnabled &&
-          ev.narrationText != null &&
-          (snapshot?.isHost == true ||
-              endpointInfo?.mode == ConnectionMode.localDemo);
-      if (shouldSpeak) {
-        narrator.speak(ev.narrationText!);
+      final canSpeakDevice = !voiceSettings.hostOnlyBroadcast ||
+          snapshot?.isHost == true ||
+          endpointInfo?.mode == ConnectionMode.localDemo;
+      if (voiceSettings.enabled && canSpeakDevice) {
+        narrator.speakEvent(ev);
       }
       notifyListeners();
     });

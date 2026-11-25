@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 import 'package:party_core/party_core.dart';
 
+import '../../../core/avatars/party_avatars.dart';
 import '../../../core/state/app_controller.dart';
 import '../../../core/theme/party_theme.dart';
+import '../../settings/voice_settings_sheet.dart';
 import 'role_card_widget.dart';
 
 class WerewolfTablePage extends StatefulWidget {
@@ -154,6 +156,10 @@ class _WerewolfTablePageState extends State<WerewolfTablePage> {
     final votePkCandidates =
         ((gs['votePkCandidates'] as List?) ?? const []).cast<String>().toSet();
     final votePkRound = (gs['votePkRound'] as num?)?.toInt() ?? 0;
+    final recordVoteHistory = gs['recordVoteHistory'] as bool? ?? false;
+    final voteHistory = ((gs['voteHistory'] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
 
     final canSelectSeat = _canSelectSeatInPhase(
       phase: phase,
@@ -194,6 +200,15 @@ class _WerewolfTablePageState extends State<WerewolfTablePage> {
           ],
         ),
         actions: [
+          if (recordVoteHistory)
+            TextButton.icon(
+              onPressed: () => _showVoteHistorySheet(players, voteHistory),
+              icon: const Icon(Icons.poll_outlined, size: 17),
+              label: Text(
+                voteHistory.isEmpty ? '票型' : '票型(${voteHistory.length})',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
           if (phase != WerewolfPhase.roleReveal && phase != WerewolfPhase.gameOver)
             TextButton.icon(
               onPressed: () => _showQuickRolePeek(
@@ -202,14 +217,15 @@ class _WerewolfTablePageState extends State<WerewolfTablePage> {
                 teammateLabels: teammateLabels,
               ),
               icon: const Icon(Icons.visibility_outlined, size: 17),
-              label: const Text('看身份', style: TextStyle(fontSize: 12)),
+              label: const Text('身份', style: TextStyle(fontSize: 12)),
             ),
           IconButton(
+            tooltip: '法官语音设置',
             icon: Icon(
-              ctrl.ttsEnabled ? Icons.volume_up : Icons.volume_off,
+              ctrl.ttsEnabled ? Icons.record_voice_over : Icons.volume_off,
               color: ctrl.ttsEnabled ? PartyColors.gold : PartyColors.textMuted,
             ),
-            onPressed: ctrl.toggleTts,
+            onPressed: () => showVoiceSettingsSheet(context, ctrl),
           ),
         ],
       ),
@@ -1079,6 +1095,12 @@ class _WerewolfTablePageState extends State<WerewolfTablePage> {
         final tally = gs['lastVoteTally'] is Map
             ? Map<String, dynamic>.from(gs['lastVoteTally'] as Map)
             : const <String, dynamic>{};
+        final recordVotes = gs['recordVoteHistory'] as bool? ?? false;
+        final history = ((gs['voteHistory'] as List?) ?? const [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+        final latestRound = history.isNotEmpty ? history.last : null;
+
         content = Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1091,7 +1113,24 @@ class _WerewolfTablePageState extends State<WerewolfTablePage> {
                 color: PartyColors.gold,
               ),
             ),
-            if (tally.isNotEmpty) ...[
+            if (recordVotes && latestRound != null) ...[
+              const SizedBox(height: 8),
+              _buildBallotLines(latestRound, players),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  onPressed: () => _showVoteHistorySheet(players, history),
+                  icon: const Icon(Icons.poll_outlined, size: 15),
+                  label: Text(
+                    '查看全部票型（${history.length}轮）',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+              ),
+            ] else if (tally.isNotEmpty) ...[
               const SizedBox(height: 6),
               Wrap(
                 spacing: 8,
@@ -1109,7 +1148,7 @@ class _WerewolfTablePageState extends State<WerewolfTablePage> {
                 }).toList(),
               ),
             ],
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             if (isHost)
               SizedBox(
                 width: double.infinity,
@@ -1199,6 +1238,196 @@ class _WerewolfTablePageState extends State<WerewolfTablePage> {
     );
   }
 
+  void _showVoteHistorySheet(
+    List<Map<String, dynamic>> players,
+    List<Map<String, dynamic>> voteHistory,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: PartyColors.bgSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.72,
+          minChildSize: 0.45,
+          maxChildSize: 0.92,
+          builder: (ctx, scrollCtrl) {
+            return ListView(
+              controller: scrollCtrl,
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.poll_outlined, color: PartyColors.gold),
+                    SizedBox(width: 8),
+                    Text(
+                      '全场公开票型记录',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  '已开启「记录并公开票型」，本局每轮警长与白天放逐投票明细对所有人公开。',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: PartyColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                if (voteHistory.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: PartyColors.bgCard,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: PartyColors.border),
+                    ),
+                    child: const Text(
+                      '目前还没有已结算的投票记录，完成任意一轮投票后会自动出现在这里。',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: PartyColors.textSecondary),
+                    ),
+                  )
+                else
+                  ...voteHistory.reversed.map(
+                    (round) => Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: PartyColors.goldSoft,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    round['roundLabel'] as String? ?? '投票记录',
+                                    style: const TextStyle(
+                                      color: PartyColors.gold,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              round['summary'] as String? ?? '',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13.5,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            _buildBallotLines(round, players),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildBallotLines(
+    Map<String, dynamic> round,
+    List<Map<String, dynamic>> players,
+  ) {
+    final ballots = Map<String, dynamic>.from(
+      round['ballots'] as Map? ?? const {},
+    );
+    final sheriffId = round['sheriffId'] as String?;
+
+    final grouped = <String, List<String>>{};
+    final abstainers = <String>[];
+
+    for (final entry in ballots.entries) {
+      final voterId = entry.key;
+      final targetId = entry.value as String?;
+      final voterSeat = _shortSeat(players, voterId);
+      final voterLabel =
+          (sheriffId != null && voterId == sheriffId) ? '$voterSeat(警长)' : voterSeat;
+      if (targetId == null) {
+        abstainers.add(voterLabel);
+      } else {
+        grouped.putIfAbsent(targetId, () => []).add(voterLabel);
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ...grouped.entries.map((e) {
+          final targetLabel = _seatLabel(players, e.key);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$targetLabel ← ',
+                  style: const TextStyle(
+                    color: PartyColors.gold,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12.5,
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    e.value.join('、'),
+                    style: const TextStyle(
+                      color: PartyColors.textPrimary,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+        if (abstainers.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              '弃票 ← ${abstainers.join("、")}',
+              style: const TextStyle(
+                color: PartyColors.textMuted,
+                fontSize: 12,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _shortSeat(List<Map<String, dynamic>> players, String playerId) {
+    for (final p in players) {
+      if (p['playerId'] == playerId) {
+        return '${p['seatNumber']}号';
+      }
+    }
+    return playerId;
+  }
+
   Widget _buildGameOverView(
     Map<String, dynamic> gs,
     List<Map<String, dynamic>> players,
@@ -1207,6 +1436,10 @@ class _WerewolfTablePageState extends State<WerewolfTablePage> {
     final winnerCamp = gs['winnerCamp'] as String? ?? 'good';
     final winReason = gs['winReason'] as String? ?? '';
     final logs = ((gs['logs'] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    final recordVoteHistory = gs['recordVoteHistory'] as bool? ?? false;
+    final voteHistory = ((gs['voteHistory'] as List?) ?? const [])
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
 
@@ -1263,22 +1496,19 @@ class _WerewolfTablePageState extends State<WerewolfTablePage> {
         ...players.map((p) {
           final role = WerewolfRole.fromName(p['role'] as String? ?? 'villager');
           final alive = p['isAlive'] as bool? ?? false;
+          final avatarIdx = (p['avatarIndex'] as num?)?.toInt() ?? 0;
           return Card(
             margin: const EdgeInsets.only(bottom: 6),
             child: ListTile(
               dense: true,
-              leading: CircleAvatar(
-                backgroundColor: roleAccentColor(role).withValues(alpha: 0.2),
-                child: Text(
-                  '${p['seatNumber']}',
-                  style: TextStyle(
-                    color: roleAccentColor(role),
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
+              leading: PartyAvatarWidget(
+                avatarIndex: avatarIdx,
+                radius: 18,
+                dimmed: !alive,
+                borderColor: roleAccentColor(role),
               ),
               title: Text(
-                '${p['name']} · ${role.displayName}',
+                '${p['seatNumber']}号 ${p['name']} · ${role.displayName}',
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
               subtitle: Text(
@@ -1293,6 +1523,37 @@ class _WerewolfTablePageState extends State<WerewolfTablePage> {
             ),
           );
         }),
+        if (recordVoteHistory && voteHistory.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          const Text(
+            '全场票型记录',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          ...voteHistory.map(
+            (round) => Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${round['roundLabel']} · ${round['summary']}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: PartyColors.gold,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    _buildBallotLines(round, players),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         const Text(
           '完整行动复盘时间线',
@@ -1377,6 +1638,7 @@ class _TableSeatTile extends StatelessWidget {
     final isSheriff = player['isSheriff'] as bool? ?? false;
     final idiotRevealed = player['idiotRevealed'] as bool? ?? false;
     final seatNum = (player['seatNumber'] as num).toInt();
+    final avatarIndex = (player['avatarIndex'] as num?)?.toInt() ?? 0;
     final name = player['name'] as String;
 
     Color borderColor = PartyColors.border;
@@ -1443,24 +1705,23 @@ class _TableSeatTile extends StatelessWidget {
                   ),
               ],
             ),
-            CircleAvatar(
-              radius: 17,
-              backgroundColor: !alive
-                  ? PartyColors.bgSurface
-                  : isWolfTeammate
-                      ? PartyColors.wolfRedSoft
-                      : PartyColors.bgElevated,
-              child: Text(
-                alive ? name.characters.first : '✕',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: !alive
-                      ? PartyColors.textMuted
-                      : isWolfTeammate
-                          ? PartyColors.wolfRed
-                          : PartyColors.textPrimary,
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                PartyAvatarWidget(
+                  avatarIndex: avatarIndex,
+                  radius: 17,
+                  dimmed: !alive,
+                  borderColor:
+                      alive && isWolfTeammate ? PartyColors.wolfRed : null,
                 ),
-              ),
+                if (!alive)
+                  const Icon(
+                    Icons.close_rounded,
+                    color: PartyColors.wolfRed,
+                    size: 22,
+                  ),
+              ],
             ),
             Column(
               children: [

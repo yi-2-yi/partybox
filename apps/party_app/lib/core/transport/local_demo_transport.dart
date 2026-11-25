@@ -10,6 +10,7 @@ import 'game_transport.dart';
 class LocalDemoTransport implements GameTransport {
   LocalDemoTransport({
     required String playerName,
+    int playerAvatarIndex = 0,
     GameType gameType = GameType.werewolf,
     WerewolfConfig? werewolfConfig,
     GuandanConfig? guandanConfig,
@@ -27,7 +28,10 @@ class LocalDemoTransport implements GameTransport {
       ]),
       random: _random,
     );
-    final me = _controller.joinPlayer(name: playerName);
+    final me = _controller.joinPlayer(
+      name: playerName,
+      avatarIndex: playerAvatarIndex,
+    );
     _humanId = me.playerId;
 
     if (gameType == GameType.werewolf) {
@@ -110,7 +114,16 @@ class LocalDemoTransport implements GameTransport {
       final idx = _controller.players.length - 1;
       final label =
           idx < botNames.length ? '${botNames[idx]}(AI)' : 'AI玩家${idx + 2}';
-      _controller.joinPlayer(name: label, isBot: true);
+      final usedAvatars = _controller.players.map((p) => p.avatarIndex).toSet();
+      var avatarIdx = (idx + 1) % 16;
+      while (usedAvatars.contains(avatarIdx) && usedAvatars.length < 16) {
+        avatarIdx = (avatarIdx + 1) % 16;
+      }
+      _controller.joinPlayer(
+        name: label,
+        avatarIndex: avatarIdx,
+        isBot: true,
+      );
     }
   }
 
@@ -120,6 +133,12 @@ class LocalDemoTransport implements GameTransport {
     try {
       List<GameEvent> emitted = const [];
       switch (message.type) {
+        case ClientMessageType.updateProfile:
+          _controller.updateProfile(
+            _humanId,
+            name: message.payload['name'] as String?,
+            avatarIndex: (message.payload['avatarIndex'] as num?)?.toInt(),
+          );
         case ClientMessageType.updateConfig:
           final cfgMap = Map<String, dynamic>.from(
             message.payload['config'] as Map? ?? {},

@@ -5,8 +5,12 @@ import 'package:party_app/core/transport/lan_host_transport_io.dart';
 import 'package:party_app/core/transport/websocket_transport.dart';
 import 'package:party_app/main.dart';
 import 'package:party_core/party_core.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
   testWidgets('Home -> 12-player Demo Lobby (Sheriff ON) -> RolePeek -> Confirm', (tester) async {
     final ctrl = AppController(narrator: NarratorService(enabled: false));
     addTearDown(ctrl.dispose);
@@ -159,6 +163,67 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(ctrl.snapshot!.gameState!['phase'], isNot('roleReveal'));
+
+    await tester.runAsync(() async {
+      await ctrl.leaveRoom();
+    });
+    await tester.pump();
+  });
+
+  testWidgets('Werewolf polish: avatar picker, custom voice settings & public vote history toggle', (tester) async {
+    final ctrl = AppController(narrator: NarratorService(enabled: false));
+    addTearDown(ctrl.dispose);
+
+    await tester.pumpWidget(PartyBoxApp(controller: ctrl));
+    await tester.pumpAndSettle();
+
+    // 1. Open avatar & nickname dialog and pick an anime avatar (神秘魔法师 index 8)
+    await tester.tap(find.text('玩家小明'));
+    await tester.pumpAndSettle();
+    expect(find.text('小动物系列'), findsOneWidget);
+    expect(find.text('动漫人物系列'), findsOneWidget);
+    await tester.tap(find.text('神秘魔法师'));
+    await tester.pump();
+    await tester.tap(find.text('保存头像与昵称'));
+    await tester.pumpAndSettle();
+    expect(ctrl.avatarIndex, 8);
+
+    // 2. Custom voice settings update & script resolution
+    await ctrl.updateVoiceSettings(
+      ctrl.voiceSettings.copyWith(
+        stylePreset: 'mystery',
+        speechRate: 0.42,
+        pitch: 0.82,
+        customScripts: {'night_wolf': '黑夜降临，狼人开始狩猎。'},
+      ),
+    );
+    expect(
+      ctrl.narrator.resolveScriptForEvent(
+        const GameEvent(
+          id: 'e1',
+          type: 'phase_change',
+          message: 'test',
+          narrationText: '默认台词',
+          payload: {'scriptKey': 'night_wolf'},
+        ),
+      ),
+      '黑夜降临，狼人开始狩猎。',
+    );
+
+    // 3. Werewolf Lobby shows "记录并公开票型" toggle, and in-game AppBar shows "票型" sheet
+    await ctrl.startLocalDemo(
+      preset: WerewolfConfig.preset6().copyWith(recordVoteHistory: true),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('记录并公开票型'), findsOneWidget);
+
+    await tester.tap(find.textContaining('开始发牌'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('票型'), findsOneWidget);
+    await tester.tap(find.text('票型'));
+    await tester.pumpAndSettle();
+    expect(find.text('全场公开票型记录'), findsOneWidget);
 
     await tester.runAsync(() async {
       await ctrl.leaveRoom();

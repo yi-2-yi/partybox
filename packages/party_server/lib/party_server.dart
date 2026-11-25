@@ -123,6 +123,15 @@ class PartyServer {
           _handleReconnect(session, msg.payload);
         case ClientMessageType.leaveRoom:
           _handleLeaveRoom(session);
+        case ClientMessageType.updateProfile:
+          _withRoom(session, (managed, playerId) {
+            managed.controller.updateProfile(
+              playerId,
+              name: msg.payload['name'] as String?,
+              avatarIndex: (msg.payload['avatarIndex'] as num?)?.toInt(),
+            );
+            _broadcastSnapshots(managed);
+          });
         case ClientMessageType.updateConfig:
           _withRoom(session, (managed, playerId) {
             final config = Map<String, dynamic>.from(
@@ -215,6 +224,7 @@ class PartyServer {
     final join = controller.joinPlayer(
       name: playerName,
       preferredPlayerId: preferredPlayerId,
+      avatarIndex: (payload['avatarIndex'] as num?)?.toInt(),
     );
     session.roomCode = roomCode;
     session.playerId = join.playerId;
@@ -238,6 +248,7 @@ class PartyServer {
     final join = managed.controller.joinPlayer(
       name: payload['name'] as String? ?? '玩家',
       preferredPlayerId: payload['playerId'] as String?,
+      avatarIndex: (payload['avatarIndex'] as num?)?.toInt(),
     );
     session.roomCode = roomCode;
     session.playerId = join.playerId;

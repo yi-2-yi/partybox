@@ -57,6 +57,7 @@ class WerewolfEngine {
           name: p.name,
           seatNumber: p.seatNumber,
           role: roleDeck[i],
+          avatarIndex: p.avatarIndex,
         ),
       );
     }
@@ -681,18 +682,29 @@ class WerewolfEngine {
       }
     }
 
+    final roundLabel = state.sheriffPkRound > 0
+        ? '第${state.dayNumber}天 · 警长竞选PK'
+        : '第${state.dayNumber}天 · 警长竞选';
+
     if (counts.isEmpty) {
-      var next = state.copyWith(
-        sheriffBadgeDestroyed: true,
-        logs: [
-          ...state.logs,
-          GameLogEntry(
-            day: state.dayNumber,
-            phase: '警长竞选',
-            summary: '警下全部弃票，警徽流失。',
-            isPublic: true,
-          ),
-        ],
+      const summary = '警下全部弃票，警徽流失。';
+      var next = _appendVoteHistory(
+        state.copyWith(
+          sheriffBadgeDestroyed: true,
+          logs: [
+            ...state.logs,
+            GameLogEntry(
+              day: state.dayNumber,
+              phase: '警长竞选',
+              summary: summary,
+              isPublic: true,
+            ),
+          ],
+        ),
+        roundLabel: roundLabel,
+        ballots: state.sheriffVotes,
+        summary: summary,
+        isSheriffVote: true,
       );
       next = _emitEvent(
         next,
@@ -713,23 +725,30 @@ class WerewolfEngine {
     if (topIds.length == 1) {
       final winnerId = topIds.first;
       final winner = state.playerById(winnerId)!;
-      var next = state.copyWith(
-        sheriffId: winnerId,
-        logs: [
-          ...state.logs,
-          GameLogEntry(
-            day: state.dayNumber,
-            phase: '警长竞选',
-            summary: '${winner.seatNumber}号 ${winner.name} 以 $maxVotes 票当选警长！',
-            isPublic: true,
-          ),
-        ],
+      final summary = '${winner.seatNumber}号 ${winner.name} 以 $maxVotes 票当选警长！';
+      var next = _appendVoteHistory(
+        state.copyWith(
+          sheriffId: winnerId,
+          logs: [
+            ...state.logs,
+            GameLogEntry(
+              day: state.dayNumber,
+              phase: '警长竞选',
+              summary: summary,
+              isPublic: true,
+            ),
+          ],
+        ),
+        roundLabel: roundLabel,
+        ballots: state.sheriffVotes,
+        summary: summary,
+        isSheriffVote: true,
       );
       next = _emitEvent(
         next,
         events,
         type: 'sheriff_result',
-        message: '${winner.seatNumber}号 ${winner.name} 以 $maxVotes 票当选警长！',
+        message: summary,
         narrationText: '恭喜${winner.seatNumber}号玩家当选警长。下面公布昨夜信息。',
       );
       return _announceDawn(next, next.pendingNightDeaths, events);
@@ -740,8 +759,16 @@ class WerewolfEngine {
           .map((id) => '${state.playerById(id)!.seatNumber}号')
           .toList()
         ..sort();
+      final pkSummary = '警长竞选平票（${pkLabels.join("、")} 进入 PK）';
+      final recorded = _appendVoteHistory(
+        state,
+        roundLabel: roundLabel,
+        ballots: state.sheriffVotes,
+        summary: pkSummary,
+        isSheriffVote: true,
+      );
       return _emitEvent(
-        state.copyWith(
+        recorded.copyWith(
           sheriffCandidates: topIds,
           sheriffVotes: {},
           sheriffPkRound: 1,
@@ -753,17 +780,24 @@ class WerewolfEngine {
       );
     }
 
-    var next = state.copyWith(
-      sheriffBadgeDestroyed: true,
-      logs: [
-        ...state.logs,
-        GameLogEntry(
-          day: state.dayNumber,
-          phase: '警长竞选',
-          summary: '警长 PK 再次平票，警徽流失。',
-          isPublic: true,
-        ),
-      ],
+    const tieSummary = '警长 PK 再次平票，警徽流失。';
+    var next = _appendVoteHistory(
+      state.copyWith(
+        sheriffBadgeDestroyed: true,
+        logs: [
+          ...state.logs,
+          GameLogEntry(
+            day: state.dayNumber,
+            phase: '警长竞选',
+            summary: tieSummary,
+            isPublic: true,
+          ),
+        ],
+      ),
+      roundLabel: roundLabel,
+      ballots: state.sheriffVotes,
+      summary: tieSummary,
+      isSheriffVote: true,
     );
     next = _emitEvent(
       next,
@@ -953,17 +987,26 @@ class WerewolfEngine {
       for (final e in halfVoteCounts.entries) e.key: e.value / 2.0,
     };
 
+    final roundLabel = state.votePkRound > 0
+        ? '第${state.dayNumber}天 · 放逐投票PK'
+        : '第${state.dayNumber}天 · 放逐投票';
+
     if (halfVoteCounts.isEmpty) {
       final summary = '全员弃票，今天没有人被放逐。';
-      var next = state.copyWith(
-        phase: WerewolfPhase.voteResult,
-        lastVoteTally: {},
-        lastVoteSummary: summary,
-        clearAfterSpecialPhase: true,
-        logs: [
-          ...state.logs,
-          GameLogEntry(day: state.dayNumber, phase: '白天·投票', summary: summary, isPublic: true),
-        ],
+      var next = _appendVoteHistory(
+        state.copyWith(
+          phase: WerewolfPhase.voteResult,
+          lastVoteTally: {},
+          lastVoteSummary: summary,
+          clearAfterSpecialPhase: true,
+          logs: [
+            ...state.logs,
+            GameLogEntry(day: state.dayNumber, phase: '白天·投票', summary: summary, isPublic: true),
+          ],
+        ),
+        roundLabel: roundLabel,
+        ballots: state.dayVotes,
+        summary: summary,
       );
       return _emitEvent(
         next,
@@ -986,8 +1029,14 @@ class WerewolfEngine {
             .map((id) => '${state.playerById(id)!.seatNumber}号')
             .toList()
           ..sort();
+        final recorded = _appendVoteHistory(
+          state,
+          roundLabel: roundLabel,
+          ballots: state.dayVotes,
+          summary: '放逐投票平票（${pkLabels.join("、")} 进入 PK）',
+        );
         return _emitEvent(
-          state.copyWith(
+          recorded.copyWith(
             votePkCandidates: topIds,
             votePkRound: 1,
             dayVotes: {},
@@ -1001,15 +1050,20 @@ class WerewolfEngine {
       }
 
       final summary = 'PK 投票再次平票，今天无人出局。';
-      var next = state.copyWith(
-        phase: WerewolfPhase.voteResult,
-        lastVoteTally: tallyDouble,
-        lastVoteSummary: summary,
-        clearAfterSpecialPhase: true,
-        logs: [
-          ...state.logs,
-          GameLogEntry(day: state.dayNumber, phase: '白天·投票', summary: summary, isPublic: true),
-        ],
+      var next = _appendVoteHistory(
+        state.copyWith(
+          phase: WerewolfPhase.voteResult,
+          lastVoteTally: tallyDouble,
+          lastVoteSummary: summary,
+          clearAfterSpecialPhase: true,
+          logs: [
+            ...state.logs,
+            GameLogEntry(day: state.dayNumber, phase: '白天·投票', summary: summary, isPublic: true),
+          ],
+        ),
+        roundLabel: roundLabel,
+        ballots: state.dayVotes,
+        summary: summary,
       );
       return _emitEvent(
         next,
@@ -1034,16 +1088,21 @@ class WerewolfEngine {
       }).toList();
       final summary =
           '${exiled.seatNumber}号 ${exiled.name} 得票最高（$voteLabel票），但翻牌亮出【白痴】免死，失去后续投票权！';
-      var next = state.copyWith(
-        players: updatedPlayers,
-        phase: WerewolfPhase.voteResult,
-        lastVoteTally: tallyDouble,
-        lastVoteSummary: summary,
-        clearAfterSpecialPhase: true,
-        logs: [
-          ...state.logs,
-          GameLogEntry(day: state.dayNumber, phase: '白天·投票', summary: summary, isPublic: true),
-        ],
+      var next = _appendVoteHistory(
+        state.copyWith(
+          players: updatedPlayers,
+          phase: WerewolfPhase.voteResult,
+          lastVoteTally: tallyDouble,
+          lastVoteSummary: summary,
+          clearAfterSpecialPhase: true,
+          logs: [
+            ...state.logs,
+            GameLogEntry(day: state.dayNumber, phase: '白天·投票', summary: summary, isPublic: true),
+          ],
+        ),
+        roundLabel: roundLabel,
+        ballots: state.dayVotes,
+        summary: summary,
       );
       return _emitEvent(
         next,
@@ -1066,19 +1125,24 @@ class WerewolfEngine {
     }).toList();
 
     final summary = '${exiled.seatNumber}号 ${exiled.name} 以 $voteLabel 票被放逐出局！';
-    var next = state.copyWith(
-      players: updatedPlayers,
-      phase: WerewolfPhase.voteResult,
-      lastVoteTally: tallyDouble,
-      lastVoteSummary: summary,
-      pendingBadgeTransferFromId:
-          state.sheriffId == exiledId ? exiledId : state.pendingBadgeTransferFromId,
-      pendingHunterId: exiled.role == WerewolfRole.hunter ? exiledId : null,
-      clearAfterSpecialPhase: true,
-      logs: [
-        ...state.logs,
-        GameLogEntry(day: state.dayNumber, phase: '白天·投票', summary: summary, isPublic: true),
-      ],
+    var next = _appendVoteHistory(
+      state.copyWith(
+        players: updatedPlayers,
+        phase: WerewolfPhase.voteResult,
+        lastVoteTally: tallyDouble,
+        lastVoteSummary: summary,
+        pendingBadgeTransferFromId:
+            state.sheriffId == exiledId ? exiledId : state.pendingBadgeTransferFromId,
+        pendingHunterId: exiled.role == WerewolfRole.hunter ? exiledId : null,
+        clearAfterSpecialPhase: true,
+        logs: [
+          ...state.logs,
+          GameLogEntry(day: state.dayNumber, phase: '白天·投票', summary: summary, isPublic: true),
+        ],
+      ),
+      roundLabel: roundLabel,
+      ballots: state.dayVotes,
+      summary: summary,
     );
 
     return _emitEvent(
@@ -1152,6 +1216,7 @@ class WerewolfEngine {
         type: 'phase_change',
         message: '第 $nextDay 夜 · 天黑请闭眼，守卫请睁眼。',
         narrationText: '天黑请闭眼。守卫请睁眼，请选择今晚要守护的玩家。',
+        payload: const {'scriptKey': 'night_guard'},
       );
     }
 
@@ -1182,6 +1247,7 @@ class WerewolfEngine {
       narrationText: includeNightOpening
           ? '天黑请闭眼。狼人请睁眼，确认队友并选择今晚要袭击的玩家。'
           : '守卫请闭眼。狼人请睁眼，确认队友并选择今晚要袭击的玩家。',
+      payload: const {'scriptKey': 'night_wolf'},
     );
   }
 
@@ -1201,6 +1267,7 @@ class WerewolfEngine {
         type: 'phase_change',
         message: '狼人请闭眼，女巫请睁眼。',
         narrationText: '狼人请闭眼。女巫请睁眼，请决定是否使用解药或毒药。',
+        payload: const {'scriptKey': 'night_witch'},
       );
     }
     return _advanceNightAfterWitch(state, events);
@@ -1222,6 +1289,7 @@ class WerewolfEngine {
         type: 'phase_change',
         message: '预言家请睁眼查验身份。',
         narrationText: '女巫请闭眼。预言家请睁眼，请选择今晚要查验的玩家。',
+        payload: const {'scriptKey': 'night_seer'},
       );
     }
     return _finishNight(state, events);
@@ -1429,6 +1497,7 @@ class WerewolfEngine {
       type: 'phase_change',
       message: '发言结束，请所有存活玩家在手机上进行放逐投票！',
       narrationText: '发言结束，请各位玩家进行放逐投票。',
+      payload: const {'scriptKey': 'day_vote'},
     );
   }
 
@@ -1507,6 +1576,7 @@ class WerewolfEngine {
         'playerId': p.playerId,
         'name': p.name,
         'seatNumber': p.seatNumber,
+        'avatarIndex': p.avatarIndex,
         'isAlive': p.isAlive,
         'idiotRevealed': p.idiotRevealed,
         'canVote': p.canVote,
@@ -1537,6 +1607,7 @@ class WerewolfEngine {
         'me': {
           'playerId': viewer.playerId,
           'seatNumber': viewer.seatNumber,
+          'avatarIndex': viewer.avatarIndex,
           'role': viewer.role.name,
           'roleName': viewer.role.displayName,
           'campName': viewer.role.campName,
@@ -1573,10 +1644,33 @@ class WerewolfEngine {
       'votePkRound': state.votePkRound,
       'lastVoteTally': state.lastVoteTally,
       'lastVoteSummary': state.lastVoteSummary,
+      'recordVoteHistory': state.config.recordVoteHistory,
+      'voteHistory': state.config.recordVoteHistory
+          ? state.voteHistory.map((r) => r.toJson()).toList()
+          : const [],
       'winnerCamp': state.winnerCamp,
       'winReason': state.winReason,
       'logs': visibleLogs,
     };
+  }
+
+  WerewolfState _appendVoteHistory(
+    WerewolfState state, {
+    required String roundLabel,
+    required Map<String, String?> ballots,
+    required String summary,
+    bool isSheriffVote = false,
+  }) {
+    if (!state.config.recordVoteHistory) return state;
+    final record = VoteRoundRecord(
+      dayNumber: state.dayNumber,
+      roundLabel: roundLabel,
+      ballots: Map<String, String?>.from(ballots),
+      summary: summary,
+      isSheriffVote: isSheriffVote,
+      sheriffId: isSheriffVote ? null : state.sheriffId,
+    );
+    return state.copyWith(voteHistory: [...state.voteHistory, record]);
   }
 
   WerewolfState _emitEvent(
@@ -1586,6 +1680,7 @@ class WerewolfEngine {
     required String message,
     String? narrationText,
     List<String>? targetPlayerIds,
+    Map<String, dynamic> payload = const {},
   }) {
     final nextSeq = state.eventSeq + 1;
     events.add(
@@ -1595,6 +1690,7 @@ class WerewolfEngine {
         message: message,
         narrationText: narrationText,
         targetPlayerIds: targetPlayerIds,
+        payload: payload,
       ),
     );
     return state.copyWith(eventSeq: nextSeq);

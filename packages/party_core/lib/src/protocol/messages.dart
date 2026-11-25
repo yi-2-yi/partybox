@@ -8,6 +8,7 @@ class ClientMessageType {
   static const joinRoom = 'join_room';
   static const reconnect = 'reconnect';
   static const leaveRoom = 'leave_room';
+  static const updateProfile = 'update_profile';
   static const updateConfig = 'update_config';
   static const toggleReady = 'toggle_ready';
   static const addBot = 'add_bot';

@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:party_core/party_core.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../core/avatars/party_avatars.dart';
 import '../../core/state/app_controller.dart';
 import '../../core/theme/party_theme.dart';
+import '../settings/voice_settings_sheet.dart';
 
 class LobbyPage extends StatelessWidget {
   const LobbyPage({super.key, required this.controller});
@@ -54,6 +56,11 @@ class LobbyPage extends StatelessWidget {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: '法官语音设置',
+            icon: const Icon(Icons.record_voice_over, color: PartyColors.gold),
+            onPressed: () => showVoiceSettingsSheet(context, controller),
+          ),
           IconButton(
             tooltip: controller.ttsEnabled ? '关闭语音播报' : '开启语音播报',
             icon: Icon(
@@ -166,6 +173,21 @@ class LobbyPage extends StatelessWidget {
                         ? (seatNum.isOdd
                             ? PartyColors.wolfRed
                             : PartyColors.seerCyan)
+                        : null,
+                    onTapSelf: (player != null && player.id == snap.yourPlayerId)
+                        ? () async {
+                            final res = await showProfileEditorDialog(
+                              context,
+                              currentName: controller.nickname,
+                              currentAvatarIndex: controller.avatarIndex,
+                            );
+                            if (res != null) {
+                              await controller.updateProfile(
+                                name: res.name,
+                                avatarIndex: res.avatarIndex,
+                              );
+                            }
+                          }
                         : null,
                   );
                 },
@@ -711,6 +733,20 @@ class _WerewolfConfigCard extends StatelessWidget {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               dense: true,
+              title: const Text('记录并公开票型', style: TextStyle(fontSize: 13.5)),
+              subtitle: const Text(
+                '开启后记录每轮警长与放逐详细投票（谁投给了谁），全员游戏内可见',
+                style:
+                    TextStyle(fontSize: 11.5, color: PartyColors.textSecondary),
+              ),
+              value: config.recordVoteHistory,
+              onChanged: isHost
+                  ? (v) => onChanged(config.copyWith(recordVoteHistory: v))
+                  : null,
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
               title: const Text('女巫首夜可自救', style: TextStyle(fontSize: 13.5)),
               value: config.witchSelfSaveFirstNight,
               onChanged: isHost
@@ -776,6 +812,7 @@ class _SeatCard extends StatelessWidget {
     required this.isMe,
     this.teamTag,
     this.teamColor,
+    this.onTapSelf,
   });
 
   final int seatNumber;
@@ -783,78 +820,89 @@ class _SeatCard extends StatelessWidget {
   final bool isMe;
   final String? teamTag;
   final Color? teamColor;
+  final VoidCallback? onTapSelf;
 
   @override
   Widget build(BuildContext context) {
     final occupied = player != null;
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: occupied ? PartyColors.bgCard : PartyColors.bgSurface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isMe
-              ? PartyColors.gold
-              : teamColor != null
-                  ? teamColor!.withValues(alpha: 0.55)
-                  : occupied
-                      ? PartyColors.border
-                      : PartyColors.border.withValues(alpha: 0.4),
-          width: isMe ? 1.6 : 1,
+    return InkWell(
+      onTap: onTapSelf,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: occupied ? PartyColors.bgCard : PartyColors.bgSurface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isMe
+                ? PartyColors.gold
+                : teamColor != null
+                    ? teamColor!.withValues(alpha: 0.55)
+                    : occupied
+                        ? PartyColors.border
+                        : PartyColors.border.withValues(alpha: 0.4),
+            width: isMe ? 1.6 : 1,
+          ),
         ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                teamTag != null ? '$seatNumber号 · $teamTag' : '$seatNumber号',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: teamColor ?? PartyColors.gold,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  teamTag != null ? '$seatNumber号 · $teamTag' : '$seatNumber号',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: teamColor ?? PartyColors.gold,
+                  ),
+                ),
+                if (isMe)
+                  const Icon(Icons.edit, size: 13, color: PartyColors.gold)
+                else if (player?.isHost == true)
+                  const Icon(Icons.star, size: 14, color: PartyColors.gold)
+                else if (player?.isReady == true)
+                  const Icon(
+                    Icons.check_circle,
+                    size: 14,
+                    color: PartyColors.guardGreen,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            if (occupied)
+              PartyAvatarWidget(
+                avatarIndex: player!.avatarIndex,
+                radius: 17,
+                dimmed: !player!.isConnected,
+                borderColor: isMe ? PartyColors.gold : null,
+              )
+            else
+              const CircleAvatar(
+                radius: 17,
+                backgroundColor: PartyColors.bgDeep,
+                child: Text(
+                  '+',
+                  style: TextStyle(
+                    color: PartyColors.textMuted,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-              if (player?.isHost == true)
-                const Icon(Icons.star, size: 14, color: PartyColors.gold)
-              else if (player?.isReady == true)
-                const Icon(
-                  Icons.check_circle,
-                  size: 14,
-                  color: PartyColors.guardGreen,
-                ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          CircleAvatar(
-            radius: 17,
-            backgroundColor: occupied
-                ? (player!.isConnected
-                    ? PartyColors.bgElevated
-                    : PartyColors.wolfRedSoft)
-                : PartyColors.bgDeep,
-            child: Text(
-              occupied ? player!.name.characters.first : '+',
+            const SizedBox(height: 6),
+            Text(
+              occupied ? (isMe ? '${player!.name}(换头像)' : player!.name) : '空位',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
                 color: occupied ? PartyColors.textPrimary : PartyColors.textMuted,
-                fontWeight: FontWeight.w700,
               ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            occupied ? player!.name : '空位',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: occupied ? PartyColors.textPrimary : PartyColors.textMuted,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

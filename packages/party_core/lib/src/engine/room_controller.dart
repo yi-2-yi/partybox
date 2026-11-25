@@ -187,6 +187,26 @@ class RoomController {
     _revision++;
   }
 
+  void updateProfile(
+    String playerId, {
+    String? name,
+    int? avatarIndex,
+  }) {
+    if (_status != RoomStatus.lobby) {
+      throw const GameRuleException('游戏开始后无法修改头像或昵称。');
+    }
+    final idx = _players.indexWhere((p) => p.id == playerId);
+    if (idx == -1) {
+      throw const GameRuleException('未找到玩家。');
+    }
+    final trimmed = name?.trim();
+    _players[idx] = _players[idx].copyWith(
+      name: (trimmed != null && trimmed.isNotEmpty) ? trimmed : null,
+      avatarIndex: avatarIndex,
+    );
+    _revision++;
+  }
+
   void updateConfig(String hostPlayerId, Map<String, dynamic> newConfig) {
     _requireHost(hostPlayerId);
     if (_status != RoomStatus.lobby) {
