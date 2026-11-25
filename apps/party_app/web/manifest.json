@@ -1,11 +1,11 @@
 {
-    "name": "party_app",
-    "short_name": "party_app",
+    "name": "PartyBox · 聚会桌游盒",
+    "short_name": "PartyBox",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0A0F1E",
+    "theme_color": "#0A0F1E",
+    "description": "PartyBox 聚会桌游盒 — 狼人杀、掼蛋、一夜终极狼人跨平台聚会桌游",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
