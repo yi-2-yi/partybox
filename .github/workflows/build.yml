@@ -1,0 +1,53 @@
+name: PartyBox CI & Mobile Builds
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-and-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Test party_core
+        working-directory: packages/party_core
+        run: |
+          dart pub get
+          dart analyze
+          dart test
+      - name: Test party_server
+        working-directory: packages/party_server
+        run: |
+          dart pub get
+          dart analyze
+          dart test
+      - name: Test & Build Android APK
+        working-directory: apps/party_app
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+          flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: partybox-android-apk
+          path: apps/party_app/build/app/outputs/flutter-apk/app-release.apk
+
+  ios-unsigned-build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Build iOS (unsigned verification)
+        working-directory: apps/party_app
+        run: |
+          flutter pub get
+          flutter build ios --release --no-codesign
