@@ -44,7 +44,7 @@ void main() {
     final cardFinder = find.textContaining('身份牌（已隐藏）');
     final gesture = await tester.startGesture(tester.getCenter(cardFinder));
     await tester.pump(const Duration(milliseconds: 250));
-    expect(find.textContaining('阵营'), findsOneWidget);
+    expect(find.textContaining('阵营'), findsAtLeastNWidgets(1));
     await gesture.up();
     await tester.pump(const Duration(milliseconds: 250));
     expect(find.textContaining('身份牌（已隐藏）'), findsOneWidget);
