@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:party_app/core/audio/narrator_service.dart';
 import 'package:party_app/core/state/app_controller.dart';
@@ -63,25 +66,46 @@ void main() {
     await tester.pump();
   });
 
-  test('Embedded LanHostGameTransport accepts real LAN WebSocket client and syncs game state', () async {
+  test('Embedded LanHostGameTransport serves zero-install iPhone web client over HTTP and syncs WebSocket clients', () async {
+    final html = await File('assets/web_client/index.html').readAsString();
     final host = await LanHostGameTransport.start(
       hostName: '房主手机',
       gameType: GameType.werewolf,
       port: 0,
+      webClientHtml: html,
     );
     addTearDown(host.close);
 
     final wsUrl = host.endpointInfo.lanWsUrl!;
+    final webUrl = host.endpointInfo.lanWebUrl!;
     expect(wsUrl, startsWith('ws://'));
+    expect(webUrl, startsWith('http://'));
 
-    // Connect a real LAN client to the host's loopback port
+    // 1. Verify iPhone Safari GET http://127.0.0.1:<port>/ returns the zero-install HTML client
+    await HttpOverrides.runWithHttpOverrides(() async {
+      final httpUri = Uri.parse(webUrl).replace(host: '127.0.0.1');
+      final httpClient = HttpClient();
+      try {
+        final req = await httpClient.getUrl(httpUri);
+        final resp = await req.close();
+        expect(resp.statusCode, HttpStatus.ok);
+        expect(resp.headers.contentType?.mimeType, 'text/html');
+        final body = await resp.transform(utf8.decoder).join();
+        expect(body, contains('PartyBox'));
+        expect(body, contains('join_room'));
+      } finally {
+        httpClient.close(force: true);
+      }
+    }, _RealHttpOverrides());
+
+    // 2. Connect a real LAN WebSocket client to the same host port
     final uri = Uri.parse(wsUrl).replace(host: '127.0.0.1').toString();
     final client = WebSocketGameTransport(
       wsUrl: uri,
       mode: ConnectionMode.lanClient,
       initialMessage: const ClientMessage(
         type: ClientMessageType.joinRoom,
-        payload: {'name': '朋友手机'},
+        payload: {'name': '朋友手机', 'avatarIndex': 4},
       ),
     );
     addTearDown(client.close);
@@ -231,3 +255,6 @@ void main() {
     await tester.pump();
   });
 }
+
+class _RealHttpOverrides extends HttpOverrides {}
+

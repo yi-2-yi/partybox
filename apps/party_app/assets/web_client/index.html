@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>PartyBox · 聚会桌游盒（免安装直连版）</title>
+<style>
+  :root {
+    --bg: #0A0F1E;
+    --surface: #131B31;
+    --card: #1A2542;
+    --elev: #233054;
+    --border: #2E3D66;
+    --gold: #F5C451;
+    --gold-soft: rgba(245,196,81,0.18);
+    --red: #E05263;
+    --red-soft: rgba(224,82,99,0.2);
+    --cyan: #38BDF8;
+    --purple: #A855F7;
+    --green: #34D399;
+    --text: #F3F6FF;
+    --muted: #A4B1D1;
+    --dim: #6F7FA3;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; min-height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+  }
+  body { display: flex; flex-direction: column; padding-bottom: env(safe-area-inset-bottom); }
+  .wrap { width: 100%; max-width: 640px; margin: 0 auto; padding: 14px; flex: 1; display: flex; flex-direction: column; }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; background: var(--surface); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 20;
+  }
+  .topbar h1 { margin: 0; font-size: 16px; font-weight: 800; }
+  .topbar small { display: block; font-size: 11px; color: var(--gold); margin-top: 2px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 14px; margin-bottom: 12px;
+  }
+  .banner {
+    background: var(--gold-soft); border: 1px solid rgba(245,196,81,0.45);
+    border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.45; margin-bottom: 12px;
+  }
+  .banner.night { background: #151E3A; border-color: var(--border); }
+  .banner.err { background: var(--red-soft); border-color: var(--red); color: #FFD2D8; }
+  input[type="text"] {
+    width: 100%; padding: 12px 14px; border-radius: 12px;
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--text); font-size: 15px; outline: none;
+  }
+  input[type="text"]:focus { border-color: var(--gold); }
+  .btn {
+    border: none; border-radius: 12px; padding: 12px 16px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    transition: opacity .12s, transform .08s;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.42; cursor: not-allowed; }
+  .btn-gold { background: var(--gold); color: #1A1400; }
+  .btn-red { background: var(--red); color: #fff; }
+  .btn-cyan { background: var(--cyan); color: #041A24; }
+  .btn-green { background: var(--green); color: #042217; }
+  .btn-purple { background: var(--purple); color: #fff; }
+  .btn-out { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn-sm { padding: 7px 11px; font-size: 12px; border-radius: 10px; }
+  .btn-block { width: 100%; }
+
+  .avatar-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 8px; }
+  .av-item {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 8px 4px; text-align: center; cursor: pointer;
+  }
+  .av-item.sel { background: var(--gold-soft); border-color: var(--gold); }
+  .av-circle {
+    width: 36px; height: 36px; border-radius: 50%; margin: 0 auto 4px;
+    display: flex; align-items: center; justify-content: center; font-size: 20px;
+    border: 1px solid rgba(255,255,255,0.25);
+  }
+  .av-circle.dim { opacity: 0.4; }
+  .av-name { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .seats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+  .seats.cols2 { grid-template-columns: repeat(2, 1fr); }
+  .seat {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 9px 7px; text-align: center; position: relative; transition: border-color .12s;
+  }
+  .seat.me { border-color: rgba(245,196,81,0.55); }
+  .seat.selectable { border-color: rgba(56,189,248,0.65); cursor: pointer; }
+  .seat.selected { border-color: var(--gold); border-width: 2px; background: var(--gold-soft); }
+  .seat.dead { opacity: 0.52; background: #0D1222; }
+  .seat-top { display: flex; justify-content: space-between; font-size: 11px; font-weight: 800; color: var(--gold); margin-bottom: 4px; }
+  .seat-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; }
+  .seat-tag { font-size: 10px; margin-top: 2px; font-weight: 700; }
+
+  .peek-card {
+    border-radius: 18px; padding: 20px 16px; text-align: center;
+    background: linear-gradient(135deg, #1E2A4A, #111930);
+    border: 1.5px solid rgba(245,196,81,0.55); margin-bottom: 12px;
+    user-select: none; -webkit-user-select: none; touch-action: manipulation;
+  }
+  .peek-card.open { background: linear-gradient(135deg, rgba(245,196,81,0.22), #1A2542); border-color: var(--gold); }
+  .peek-title { font-size: 22px; font-weight: 800; color: var(--gold); margin: 4px 0; }
+  .peek-desc { font-size: 13px; color: var(--text); line-height: 1.45; margin-top: 6px; }
+
+  .dock {
+    position: sticky; bottom: 0; background: var(--surface);
+    border-top: 1px solid var(--border); padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+    margin: auto -14px -14px; z-index: 15;
+  }
+  .pill {
+    display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700;
+    background: var(--elev); color: var(--muted);
+  }
+  .pill.gold { background: var(--gold-soft); color: var(--gold); }
+  .pill.red { background: var(--red-soft); color: var(--red); }
+
+  /* Guandan poker cards */
+  .felt {
+    background: linear-gradient(180deg, #10332C, #0A221E);
+    border: 1.4px solid rgba(52,211,153,0.4); border-radius: 18px;
+    padding: 14px; text-align: center; margin-bottom: 10px; min-height: 110px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .hand-scroll { overflow-x: auto; padding: 16px 4px 6px; -webkit-overflow-scrolling: touch; }
+  .hand-row { display: inline-flex; position: relative; height: 78px; }
+  .pcard {
+    width: 48px; height: 72px; border-radius: 8px; background: #FAF9F5; color: #141B2D;
+    border: 1px solid #CBD5E1; padding: 4px; font-weight: 900; font-size: 13px;
+    position: relative; flex-shrink: 0; margin-left: -17px; cursor: pointer;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.35); transition: transform .1s, border-color .1s;
+    user-select: none; -webkit-user-select: none;
+  }
+  .pcard:first-child { margin-left: 0; }
+  .pcard.red { color: #D92D4B; }
+  .pcard.wild { background: #FFF8E1; border: 1.8px solid #E5A00D; }
+  .pcard.lvl { border-color: var(--cyan); }
+  .pcard.sel { transform: translateY(-13px); border: 2.2px solid var(--gold); box-shadow: 0 6px 12px rgba(245,196,81,0.45); z-index: 5; }
+  .pcard.mini { width: 38px; height: 54px; font-size: 11px; margin-left: -6px; cursor: default; }
+  .pcard .badge {
+    position: absolute; top: 2px; right: 2px; font-size: 9px; padding: 1px 3px;
+    border-radius: 4px; color: #fff; font-weight: 800;
+  }
+  .badge-wild { background: #D97706; }
+  .badge-lvl { background: #0284C7; }
+
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 50;
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .modal-box {
+    width: 100%; max-width: 640px; max-height: 82vh; overflow-y: auto;
+    background: var(--surface); border-top: 1px solid var(--border);
+    border-radius: 22px 22px 0 0; padding: 18px 16px 28px;
+  }
+  .center-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+  .ccard {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 11px 6px; text-align: center; font-size: 12px; font-weight: 700;
+  }
+  .ccard.selectable { border-color: var(--purple); cursor: pointer; }
+  .ccard.sel { background: var(--gold-soft); border: 2px solid var(--gold); color: var(--gold); }
+  .log-line { font-size: 12.5px; color: var(--muted); margin-bottom: 6px; line-height: 1.45; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(() => {
+  const AVATARS = [
+    { e: '🦊', n: '小狐狸', g: 'linear-gradient(135deg,#F97316,#9A3412)' },
+    { e: '🐺', n: '森林孤狼', g: 'linear-gradient(135deg,#64748B,#1E293B)' },
+    { e: '🐱', n: '软萌橘猫', g: 'linear-gradient(135deg,#FBBF24,#B45309)' },
+    { e: '🐶', n: '憨憨柴犬', g: 'linear-gradient(135deg,#F59E0B,#78350F)' },
+    { e: '🐼', n: '功夫熊猫', g: 'linear-gradient(135deg,#34D399,#065F46)' },
+    { e: '🐰', n: '软耳兔兔', g: 'linear-gradient(135deg,#F472B6,#9D174D)' },
+    { e: '🦉', n: '猫头鹰', g: 'linear-gradient(135deg,#818CF8,#312E81)' },
+    { e: '🐻', n: '蜂蜜棕熊', g: 'linear-gradient(135deg,#D97706,#451A03)' },
+    { e: '🧙', n: '魔法师', g: 'linear-gradient(135deg,#A855F7,#4C1D95)' },
+    { e: '🥷', n: '暗影忍者', g: 'linear-gradient(135deg,#38BDF8,#0C4A6E)' },
+    { e: '🧝', n: '精灵射手', g: 'linear-gradient(135deg,#10B981,#064E3B)' },
+    { e: '🦸', n: '热血英雄', g: 'linear-gradient(135deg,#EF4444,#7F1D1D)' },
+    { e: '🕵️', n: '侦探少年', g: 'linear-gradient(135deg,#6366F1,#1E1B4B)' },
+    { e: '🧚', n: '治愈精灵', g: 'linear-gradient(135deg,#EC4899,#701A75)' },
+    { e: '🧛', n: '暗夜伯爵', g: 'linear-gradient(135deg,#E11D48,#4C0519)' },
+    { e: '🤖', n: '机甲少年', g: 'linear-gradient(135deg,#06B6D4,#164E63)' },
+  ];
+  const avOf = (i) => AVATARS[((i || 0) % 16 + 16) % 16];
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+  const S = {
+    name: localStorage.getItem('pb_name') || '',
+    avatarIndex: parseInt(localStorage.getItem('pb_av') || '0', 10) || 0,
+    ws: null,
+    status: 'idle', // idle | connecting | connected | reconnecting
+    snap: null,
+    token: sessionStorage.getItem('pb_tok') || null,
+    playerId: sessionStorage.getItem('pb_pid') || null,
+    lastEvent: null,
+    error: null,
+    // Interactive UI selections
+    selectedTargetId: null,
+    selectedTargets: new Set(),
+    selectedCenters: new Set(),
+    selectedCards: new Set(),
+    witchPoisonMode: false,
+    peeking: false,
+    modal: null, // null | 'profile' | 'voteHistory' | 'rolePeek'
+    lastPhaseKey: null,
+  };
+
+  function wsEndpoint() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${proto}//${location.host}/ws`;
+  }
+
+  function send(type, payload = {}) {
+    if (S.ws && S.ws.readyState === 1) {
+      S.ws.send(JSON.stringify({ type, payload }));
+    }
+  }
+
+  function sendAction(actionType, data = {}) {
+    send('game_action', { actionType, data });
+  }
+
+  function connect(isReconnect = false) {
+    S.error = null;
+    S.status = isReconnect ? 'reconnecting' : 'connecting';
+    render();
+    try {
+      const ws = new WebSocket(wsEndpoint());
+      S.ws = ws;
+      ws.onopen = () => {
+        S.status = 'connected';
+        if (isReconnect && S.playerId && S.token) {
+          send('reconnect', { playerId: S.playerId, sessionToken: S.token });
+        } else {
+          send('join_room', { name: S.name || 'iPhone玩家', avatarIndex: S.avatarIndex, playerId: S.playerId || undefined });
+        }
+        render();
+      };
+      ws.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === 'room_snapshot') {
+            S.snap = msg.payload;
+            if (S.snap.yourPlayerId) {
+              S.playerId = S.snap.yourPlayerId;
+              sessionStorage.setItem('pb_pid', S.playerId);
+            }
+            if (S.snap.sessionToken) {
+              S.token = S.snap.sessionToken;
+              sessionStorage.setItem('pb_tok', S.token);
+            }
+            const phaseKey = S.snap.gameState ? `${S.snap.gameType}_${S.snap.gameState.phase}_${S.snap.gameState.dayNumber || S.snap.gameState.wakeIndex || S.snap.revision}` : 'lobby';
+            if (S.snap.gameType !== 'guandan' && phaseKey !== S.lastPhaseKey) {
+              S.lastPhaseKey = phaseKey;
+              S.selectedTargetId = null;
+              S.selectedTargets.clear();
+              S.selectedCenters.clear();
+              S.witchPoisonMode = false;
+            }
+            if (S.snap.gameType === 'guandan' && S.snap.gameState && S.snap.gameState.myHand) {
+              const handSet = new Set(S.snap.gameState.myHand.map(c => c.id));
+              for (const id of [...S.selectedCards]) if (!handSet.has(id)) S.selectedCards.delete(id);
+            }
+            S.error = null;
+            render();
+          } else if (msg.type === 'game_event') {
+            S.lastEvent = msg.payload;
+            render();
+          } else if (msg.type === 'error') {
+            S.error = msg.payload.message || '操作失败';
+            render();
+          }
+        } catch (_) {}
+      };
+      ws.onclose = () => {
+        if (S.snap && S.playerId && S.token) {
+          S.status = 'reconnecting';
+          render();
+          setTimeout(() => connect(true), 1800);
+        } else {
+          S.status = 'idle';
+          render();
+        }
+      };
+    } catch (e) {
+      S.error = '连接房主失败，请确认仍连接在同一热点或 Wi-Fi 下。';
+      S.status = 'idle';
+      render();
+    }
+  }
+
+  setInterval(() => {
+    if (S.ws && S.ws.readyState === 1) send('ping');
+  }, 15000);
+
+  function seatLabel(players, id) {
+    const p = (players || []).find(x => (x.playerId || x.id) === id);
+    return p ? `${p.seatNumber}号 ${p.name}` : id;
+  }
+
+  function renderAvatar(idx, dim = false, size = 36) {
+    const a = avOf(idx);
+    return `<div class="av-circle ${dim ? 'dim' : ''}" style="background:${a.g};width:${size}px;height:${size}px;font-size:${Math.round(size*0.56)}px">${a.e}</div>`;
+  }
+
+  function renderJoinScreen() {
+    return `
+      <div class="topbar">
+        <div>
+          <h1>🎲 PartyBox 聚会直连</h1>
+          <small>免安装 · 局域网/手机热点无线联机</small>
+        </div>
+      </div>
+      <div class="wrap">
+        ${S.error ? `<div class="banner err">${esc(S.error)}</div>` : ''}
+        <div class="card">
+          <div style="font-size:17px;font-weight:800;margin-bottom:4px">加入房主的聚会房间</div>
+          <div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">选一个喜欢的头像和昵称，点击下方按钮立即入座（支持狼人杀、掼蛋、一夜狼）</div>
+          <input id="nameInput" type="text" maxlength="12" placeholder="输入你的昵称（例如：小明）" value="${esc(S.name)}" />
+          <div style="font-size:12px;color:var(--muted);font-weight:700;margin-top:14px">选择头像（小动物 / 动漫人物）</div>
+          <div class="avatar-grid">
+            ${AVATARS.map((a, idx) => `
+              <div class="av-item ${S.avatarIndex === idx ? 'sel' : ''}" data-pick-av="${idx}">
+                <div class="av-circle" style="background:${a.g}">${a.e}</div>
+                <div class="av-name">${a.n}</div>
+              </div>
+            `).join('')}
+          </div>
+          <button id="joinBtn" class="btn btn-gold btn-block" style="margin-top:16px" ${S.status === 'connecting' ? 'disabled' : ''}>
+            ${S.status === 'connecting' ? '正在连接房主…' : '立即加入房间'}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderLobby() {
+    const snap = S.snap;
+    const me = (snap.players || []).find(p => p.id === snap.yourPlayerId);
+    const gameNames = { werewolf: '狼人杀', guandan: '掼蛋', oneNight: '一夜终极狼人' };
+    const isGd = snap.gameType === 'guandan';
+    return `
+      <div class="topbar">
+        <div>
+          <h1>${gameNames[snap.gameType] || '桌游'}大厅 · 房号 ${esc(snap.roomCode)}</h1>
+          <small>${S.status === 'reconnecting' ? '网络波动，正在自动重连…' : '已连接至房主局域网主机'}</small>
+        </div>
+        <button class="btn btn-out btn-sm" data-open-modal="profile">换头像</button>
+      </div>
+      <div class="wrap">
+        ${S.error ? `<div class="banner err">${esc(S.error)}</div>` : ''}
+        <div class="banner">已入座 ${snap.players.length} 人。请点击底部「准备」，等待房主配置好板子后开始发牌！</div>
+        <div class="seats ${isGd ? 'cols2' : ''}">
+          ${snap.players.map(p => {
+            const isMe = p.id === snap.yourPlayerId;
+            const teamTag = isGd ? (p.seatNumber % 2 === 1 ? '红队' : '蓝队') : '';
+            return `
+              <div class="seat ${isMe ? 'me' : ''}" ${isMe ? 'data-open-modal="profile"' : ''}>
+                <div class="seat-top">
+                  <span>${p.seatNumber}号${teamTag ? '·'+teamTag : ''}</span>
+                  <span>${p.isHost ? '★房主' : (p.isReady ? '✓已准备' : '未准备')}</span>
+                </div>
+                ${renderAvatar(p.avatarIndex, !p.isConnected)}
+                <div class="seat-name">${esc(p.name)}${isMe ? '(我)' : ''}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        <div class="dock">
+          <button id="readyBtn" class="btn ${me && me.isReady ? 'btn-out' : 'btn-gold'} btn-block">
+            ${me && me.isReady ? '已准备（点击取消）' : '点击准备'}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderWerewolf() {
+    const gs = S.snap.gameState;
+    const me = gs.me;
+    const phase = gs.phase;
+    const players = gs.players || [];
+    const wolves = new Set(gs.teammateWolfIds || []);
+    const canVote = gs.recordVoteHistory;
+    const voteHistory = gs.voteHistory || [];
+    const sheriffCandidates = new Set(gs.sheriffCandidates || []);
+    const sheriffVoted = new Set(gs.sheriffVotedIds || []);
+    const dayVoted = new Set(gs.dayVotedIds || []);
+    const pkCands = new Set(gs.votePkCandidates || []);
+
+    const canSelect = (
+      (phase === 'nightGuard' && me.isAlive && me.role === 'guard') ||
+      (phase === 'nightWolf' && me.isAlive && me.role === 'werewolf') ||
+      (phase === 'nightWitch' && me.isAlive && me.role === 'witch' && S.witchPoisonMode) ||
+      (phase === 'nightSeer' && me.isAlive && me.role === 'seer' && !gs.currentNightSeerChecked) ||
+      (phase === 'sheriffVote' && !sheriffCandidates.has(me.playerId) && !sheriffVoted.has(me.playerId)) ||
+      (phase === 'sheriffBadgeTransfer' && gs.pendingBadgeTransferFromId === me.playerId) ||
+      (phase === 'hunterShoot' && gs.pendingHunterId === me.playerId) ||
+      (phase === 'dayVote' && me.isAlive && me.canVote && !dayVoted.has(me.playerId))
+    );
+
+    const isTargetOk = (p) => {
+      if (!canSelect) return false;
+      const pid = p.playerId;
+      if (phase === 'nightGuard') return p.isAlive && pid !== gs.guardLastTargetId;
+      if (phase === 'nightSeer') return p.isAlive && pid !== me.playerId;
+      if (phase === 'sheriffVote') return sheriffCandidates.has(pid);
+      if (phase === 'dayVote') return p.isAlive && (gs.votePkRound === 0 || pkCands.has(pid));
+      return p.isAlive;
+    };
+
+    const teammatesText = players.filter(p => wolves.has(p.playerId) && p.playerId !== me.playerId)
+      .map(p => `${p.seatNumber}号 ${p.name}`).join('、');
+
+    let bodyHtml = '';
+    if (phase === 'gameOver') {
+      const goodWin = gs.winnerCamp === 'good';
+      bodyHtml = `
+        <div class="card" style="text-align:center;border-color:${goodWin ? 'var(--gold)' : 'var(--red)'}">
+          <div style="font-size:24px;font-weight:800;color:${goodWin ? 'var(--gold)' : 'var(--red)'}">${goodWin ? '🏆 好人阵营获胜！' : '🐺 狼人阵营获胜！'}</div>
+          <div style="color:var(--muted);font-size:13px;margin-top:6px">${esc(gs.winReason)}</div>
+        </div>
+        <div class="card">
+          <div style="font-weight:800;margin-bottom:8px">全员身份揭晓</div>
+          ${players.map(p => `
+            <div class="row" style="padding:6px 0;border-bottom:1px solid var(--border)">
+              ${renderAvatar(p.avatarIndex, !p.isAlive, 32)}
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:700">${p.seatNumber}号 ${esc(p.name)} · <span style="color:var(--gold)">${esc(p.roleName)}</span></div>
+                <div style="font-size:11px;color:var(--muted)">${p.isAlive ? '存活至终局' : `第${p.deathDay||'?'}天 ${esc(p.deathReason||'出局')}`}</div>
+              </div>
+              ${p.isSheriff ? '<span class="pill gold">警长</span>' : ''}
+            </div>
+          `).join('')}
+        </div>
+        ${canVote && voteHistory.length ? `<div class="card"><div style="font-weight:800;margin-bottom:8px">全场票型记录</div>${voteHistory.map(r => renderVoteRoundHtml(r, players)).join('')}</div>` : ''}
+        <div class="card">
+          <div style="font-weight:800;margin-bottom:8px">完整复盘时间线</div>
+          ${(gs.logs || []).map(l => `<div class="log-line">[${esc(l.phase)}] ${esc(l.summary)}</div>`).join('')}
+        </div>
+      `;
+    } else {
+      bodyHtml = `
+        ${phase === 'roleReveal' ? renderPeekCardHtml(`${me.seatNumber}号`, me.roleName, me.campName, me.roleDescription, teammatesText ? `狼队友：${teammatesText}` : '') : ''}
+        <div class="seats">
+          ${players.map(p => {
+            const ok = isTargetOk(p);
+            const sel = S.selectedTargetId === p.playerId;
+            const isTeammate = me.role === 'werewolf' && wolves.has(p.playerId) && p.playerId !== me.playerId;
+            return `
+              <div class="seat ${p.playerId === me.playerId ? 'me' : ''} ${ok ? 'selectable' : ''} ${sel ? 'selected' : ''} ${!p.isAlive ? 'dead' : ''}" ${ok ? `data-ww-seat="${p.playerId}"` : ''}>
+                <div class="seat-top">
+                  <span>${p.seatNumber}号</span>
+                  <span>${p.isSheriff ? '👑警长' : (sheriffCandidates.has(p.playerId) && (phase==='sheriffSignup'||phase==='sheriffVote') ? '警上' : '')}</span>
+                </div>
+                ${renderAvatar(p.avatarIndex, !p.isAlive)}
+                <div class="seat-name">${esc(p.name)}${p.playerId === me.playerId ? '(我)' : ''}</div>
+                <div class="seat-tag" style="color:${isTeammate ? 'var(--red)' : 'var(--muted)'}">
+                  ${!p.isAlive ? '已出局' : (p.idiotRevealed ? '白痴(无票)' : (isTeammate ? '狼队友' : ''))}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    const dockHtml = phase === 'gameOver' ? '' : `<div class="dock">${renderWerewolfDock(gs, me, players, sheriffCandidates, sheriffVoted, dayVoted)}</div>`;
+
+    return `
+      <div class="topbar">
+        <div>
+          <h1>${gs.dayNumber === 0 ? '狼人杀' : `第${gs.dayNumber}${gs.isNight ? '夜' : '天'}`} · ${esc(gs.phaseName)}</h1>
+          <small>${me.seatNumber}号 · ${me.isAlive ? '存活' : '已出局'}${gs.sheriffId === me.playerId ? ' · 警长' : ''}</small>
+        </div>
+        <div class="row">
+          ${canVote ? `<button class="btn btn-out btn-sm" data-open-modal="voteHistory">票型${voteHistory.length ? `(${voteHistory.length})` : ''}</button>` : ''}
+          ${phase !== 'roleReveal' && phase !== 'gameOver' ? `<button class="btn btn-out btn-sm" data-open-modal="rolePeek">看身份</button>` : ''}
+        </div>
+      </div>
+      <div class="wrap">
+        ${S.error ? `<div class="banner err">${esc(S.error)}</div>` : ''}
+        ${S.lastEvent ? `<div class="banner ${gs.isNight ? 'night' : ''}">${esc(S.lastEvent.message)}</div>` : ''}
+        ${bodyHtml}
+        ${dockHtml}
+      </div>
+    `;
+  }
+
+  function renderWerewolfDock(gs, me, players, sheriffCandidates, sheriffVoted, dayVoted) {
+    const phase = gs.phase;
+    if (phase === 'roleReveal') {
+      return `<button class="btn btn-gold btn-block" data-ww-act="confirm_role" ${me.confirmedRole ? 'disabled' : ''}>${me.confirmedRole ? '已确认，等待其他玩家…' : '我已记住身份，准备天黑'}</button>`;
+    }
+    if (phase === 'nightGuard' && me.isAlive && me.role === 'guard') {
+      return `<div class="row"><button class="btn btn-out" style="flex:1" data-ww-act="guard_protect" data-null="1">空守</button><button class="btn btn-green" style="flex:2" data-ww-act="guard_protect" ${S.selectedTargetId ? '' : 'disabled'}>确认守护</button></div>`;
+    }
+    if (phase === 'nightWolf' && me.isAlive && me.role === 'werewolf') {
+      const done = (gs.wolfConfirmedIds || []).includes(me.playerId);
+      return `<div class="row"><button class="btn btn-out" style="flex:1" data-ww-act="wolf_confirm" data-null="1" ${done ? 'disabled' : ''}>空刀</button><button class="btn btn-red" style="flex:2" data-ww-act="wolf_confirm" ${done || !S.selectedTargetId ? 'disabled' : ''}>${done ? '已确认，等待队友' : '确认袭击'}</button></div>`;
+    }
+    if (phase === 'nightWitch' && me.isAlive && me.role === 'witch' && gs.witchInfo) {
+      const info = gs.witchInfo;
+      const tip = info.antidoteUsed ? '解药已用完' : (info.wolfTargetId ? `今夜被刀：${seatLabel(players, info.wolfTargetId)}` : '今夜无人被刀');
+      return `
+        <div style="font-size:13px;color:var(--purple);font-weight:700;margin-bottom:8px;text-align:center">${esc(tip)}${S.witchPoisonMode ? '（请点上方座位选毒杀目标）' : ''}</div>
+        <div class="row">
+          <button class="btn btn-green btn-sm" style="flex:1" data-witch="save" ${info.canSaveTarget ? '' : 'disabled'}>解药</button>
+          <button class="btn btn-purple btn-sm" style="flex:1" data-witch="poison" ${info.poisonUsed ? 'disabled' : ''}>${S.witchPoisonMode ? '确认毒杀' : '毒药'}</button>
+          <button class="btn btn-out btn-sm" data-witch="skip">不用药</button>
+        </div>
+      `;
+    }
+    if (phase === 'nightSeer' && me.isAlive && me.role === 'seer') {
+      if (gs.currentNightSeerChecked) {
+        const latest = (gs.seerHistory || []).slice(-1)[0];
+        return `
+          <div class="banner" style="text-align:center;font-weight:800">查验结果：${latest.targetSeat}号 ${esc(latest.targetName)} 是【${latest.isWolf ? '狼人' : '好人'}】</div>
+          <button class="btn btn-gold btn-block" data-ww-act="seer_done">已记住结果，闭眼</button>
+        `;
+      }
+      return `<button class="btn btn-cyan btn-block" data-ww-act="seer_check" ${S.selectedTargetId ? '' : 'disabled'}>${S.selectedTargetId ? `查验 ${seatLabel(players, S.selectedTargetId)}` : '点击上方座位选择查验目标'}</button>`;
+    }
+    if (phase === 'sheriffSignup') {
+      const isCand = sheriffCandidates.has(me.playerId);
+      const decided = (gs.sheriffSignupDecidedIds || []).includes(me.playerId);
+      return `<div class="row">
+        <button class="btn btn-out" style="flex:1" data-sheriff-join="0" ${decided && !isCand ? 'disabled' : ''}>不上警</button>
+        <button class="btn btn-gold" style="flex:1" data-sheriff-join="${isCand ? 'withdraw' : '1'}">${isCand ? '退水' : '我要上警！'}</button>
+      </div>`;
+    }
+    if (phase === 'sheriffVote') {
+      if (sheriffCandidates.has(me.playerId)) {
+        return `<button class="btn btn-out btn-block" data-sheriff-join="withdraw">你是警上候选人（点击退水）</button>`;
+      }
+      const voted = sheriffVoted.has(me.playerId);
+      return `<div class="row">
+        <button class="btn btn-out" style="flex:1" data-ww-act="sheriff_vote" data-null="1" ${voted ? 'disabled' : ''}>弃票</button>
+        <button class="btn btn-gold" style="flex:2" data-ww-act="sheriff_vote" ${voted || !S.selectedTargetId ? 'disabled' : ''}>${voted ? '已投票…' : '投给选中候选人'}</button>
+      </div>`;
+    }
+    if (phase === 'sheriffBadgeTransfer' && gs.pendingBadgeTransferFromId === me.playerId) {
+      return `<div class="row"><button class="btn btn-out" style="flex:1" data-ww-act="sheriff_transfer" data-null="1">撕毁警徽</button><button class="btn btn-gold" style="flex:2" data-ww-act="sheriff_transfer" ${S.selectedTargetId ? '' : 'disabled'}>移交警徽</button></div>`;
+    }
+    if (phase === 'hunterShoot' && gs.pendingHunterId === me.playerId) {
+      return `<div class="row"><button class="btn btn-out" style="flex:1" data-ww-act="hunter_shoot" data-null="1">不开枪</button><button class="btn btn-red" style="flex:2" data-ww-act="hunter_shoot" ${S.selectedTargetId ? '' : 'disabled'}>开枪带走</button></div>`;
+    }
+    if (phase === 'dayVote') {
+      if (!me.isAlive || !me.canVote) return `<div style="text-align:center;color:var(--muted);font-size:13px">${!me.isAlive ? '你已出局，无法投票' : '你已翻牌白痴，失去投票权'}</div>`;
+      const voted = dayVoted.has(me.playerId);
+      return `<div class="row"><button class="btn btn-out" style="flex:1" data-ww-act="day_vote" data-null="1" ${voted ? 'disabled' : ''}>弃票</button><button class="btn btn-gold" style="flex:2" data-ww-act="day_vote" ${voted || !S.selectedTargetId ? 'disabled' : ''}>${voted ? '已投票，等待结算…' : (S.selectedTargetId ? `放逐 ${seatLabel(players, S.selectedTargetId)}` : '点上方座位投票')}</button></div>`;
+    }
+    if (phase === 'voteResult') {
+      const hist = gs.voteHistory || [];
+      const latest = hist.length ? hist[hist.length - 1] : null;
+      return `<div style="text-align:center;font-weight:800;color:var(--gold);margin-bottom:6px">${esc(gs.lastVoteSummary)}</div>${gs.recordVoteHistory && latest ? renderVoteRoundHtml(latest, players) : ''}<div style="text-align:center;color:var(--muted);font-size:12px;margin-top:6px">等待房主继续流程…</div>`;
+    }
+    if (gs.isNight) return `<div style="text-align:center;color:var(--muted);font-size:13px">🌙 天黑请闭眼，当前为其他角色行动时间…</div>`;
+    return `<div style="text-align:center;color:var(--muted);font-size:13px">线下自由交流中，等待房主推进…</div>`;
+  }
+
+  function renderVoteRoundHtml(round, players) {
+    const ballots = round.ballots || {};
+    const grouped = {};
+    const abs = [];
+    for (const [vid, tid] of Object.entries(ballots)) {
+      const vp = players.find(p => p.playerId === vid);
+      const vLabel = `${vp ? vp.seatNumber + '号' : vid}${round.sheriffId === vid ? '(警长)' : ''}`;
+      if (!tid) abs.push(vLabel);
+      else (grouped[tid] = grouped[tid] || []).push(vLabel);
+    }
+    return `
+      <div style="background:var(--surface);border-radius:10px;padding:10px;margin-bottom:8px;font-size:12px">
+        <div style="color:var(--gold);font-weight:700;margin-bottom:4px">${esc(round.roundLabel)} · ${esc(round.summary)}</div>
+        ${Object.entries(grouped).map(([tid, vs]) => `<div style="margin-bottom:2px"><b style="color:var(--gold)">${esc(seatLabel(players, tid))}</b> ← ${vs.join('、')}</div>`).join('')}
+        ${abs.length ? `<div style="color:var(--dim)">弃票 ← ${abs.join('、')}</div>` : ''}
+      </div>
+    `;
+  }
+
+  function renderGuandan() {
+    const gs = S.snap.gameState;
+    const players = gs.players || [];
+    const myIdx = Math.max(0, players.findIndex(p => p.playerId === S.snap.yourPlayerId));
+    const right = players[(myIdx + 1) % 4];
+    const partner = players[(myIdx + 2) % 4];
+    const left = players[(myIdx + 3) % 4];
+    const hand = gs.myHand || [];
+    const lvl = gs.currentLevel;
+    const lp = gs.lastPlay;
+    const suitSym = { spades: '♠', hearts: '♥', clubs: '♣', diamonds: '♦', joker: '★' };
+    const rankStr = (r) => ({11:'J',12:'Q',13:'K',14:'A',15:'小王',16:'大王'}[r] || String(r));
+    const renderCard = (c, mini = false) => {
+      const isWild = c.suit === 'hearts' && c.rank === lvl;
+      const isLvl = c.rank === lvl && c.rank < 15;
+      const isRed = c.rank === 16 || c.suit === 'hearts' || c.suit === 'diamonds';
+      const sel = !mini && S.selectedCards.has(c.id);
+      return `
+        <div class="pcard ${isRed ? 'red' : ''} ${isWild ? 'wild' : ''} ${isLvl ? 'lvl' : ''} ${sel ? 'sel' : ''} ${mini ? 'mini' : ''}" ${mini ? '' : `data-gd-card="${c.id}"`}>
+          <div>${c.rank >= 15 ? (c.rank === 16 ? '大' : '小') : rankStr(c.rank)}</div>
+          <div>${c.rank >= 15 ? '王' : suitSym[c.suit]}</div>
+          ${isWild ? '<span class="badge badge-wild">配</span>' : (isLvl && !mini ? '<span class="badge badge-lvl">级</span>' : '')}
+        </div>
+      `;
+    };
+
+    const split = hand.length > 14 ? Math.ceil(hand.length / 2) : hand.length;
+    const row1 = hand.slice(0, split);
+    const row2 = hand.slice(split);
+
+    return `
+      <div class="topbar" style="background:#0A1619">
+        <div>
+          <h1>掼蛋 · 第${gs.roundNumber}局 · 打 ${esc(gs.currentLevelLabel)}</h1>
+          <small>红队:${esc(gs.teamLevelLabels[0])} | 蓝队:${esc(gs.teamLevelLabels[1])} · ♥${esc(gs.currentLevelLabel)}逢人配</small>
+        </div>
+      </div>
+      <div class="wrap">
+        ${S.error ? `<div class="banner err">${esc(S.error)}</div>` : ''}
+        <div class="seats">
+          ${[left, partner, right].map((p, idx) => `
+            <div class="seat ${p.isCurrentTurn ? 'selected' : ''}">
+              <div class="seat-top"><span>${p.seatNumber}号·${['上家','对家','下家'][idx]}</span><span>${p.teamName}</span></div>
+              <div class="seat-name">${esc(p.name)}</div>
+              <div class="seat-tag" style="color:var(--gold)">${p.finishOrder ? ['','头游','二游','三游','末游'][p.finishOrder] : `剩 ${p.cardCount} 张`}</div>
+              <div class="seat-tag" style="color:var(--muted)">${esc(p.lastAction || '')}</div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="felt">
+          ${gs.phase === 'roundOver' || gs.phase === 'matchOver' ? `
+            <div style="font-size:18px;font-weight:800;color:var(--gold);margin-bottom:6px">${gs.phase === 'matchOver' ? '🏆 比赛结束' : '本局结算'}</div>
+            <div style="font-size:13px;line-height:1.45">${esc(gs.lastRoundSummary)}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:8px">等待房主开启下一局或返回大厅…</div>
+          ` : (gs.phase === 'tributePay' || gs.phase === 'tributeReturn' ? `
+            <div style="font-size:16px;font-weight:800;color:var(--gold)">${esc(gs.phaseName)}</div>
+            <div style="font-size:13px;margin-top:6px">${esc(gs.tributeSummary)}</div>
+          ` : (lp ? `
+            <div class="pill ${lp.bombTier > 0 ? 'red' : 'gold'}" style="margin-bottom:10px">${esc(seatLabel(players, gs.lastPlayPlayerId))}：${esc(lp.displayName)}</div>
+            <div class="row" style="justify-content:center;flex-wrap:wrap">${lp.cards.map(c => renderCard(c, true)).join('')}</div>
+          ` : `<div style="font-size:14px;font-weight:700">新一轮出牌 · 等待 ${gs.currentTurnSeat}号 先手</div>`))}
+        </div>
+        <div class="dock">
+          ${gs.pendingTributePay ? `<button class="btn btn-gold btn-block" data-gd-act="pay" ${S.selectedCards.size === 1 ? '' : 'disabled'}>确认进贡选中卡牌（最大非逢人配）</button>` :
+            gs.pendingTributeReturn ? `<button class="btn btn-gold btn-block" data-gd-act="ret" ${S.selectedCards.size === 1 ? '' : 'disabled'}>确认还贡选中卡牌（≤10）</button>` :
+            gs.isMyTurn ? `<div class="row" style="margin-bottom:8px">
+              ${gs.canPass ? `<button class="btn btn-out" style="flex:1" data-gd-act="pass">不要</button>` : ''}
+              <button class="btn btn-out" data-gd-act="clear">重选</button>
+              <button class="btn btn-gold" style="flex:2" data-gd-act="play" ${S.selectedCards.size > 0 ? '' : 'disabled'}>出牌 (${S.selectedCards.size})</button>
+            </div>` : `<div style="text-align:center;color:var(--muted);font-size:12.5px;margin-bottom:6px">等待 ${gs.currentTurnSeat}号 出牌…</div>`}
+          <div class="hand-scroll">
+            <div class="hand-row">${row1.map(c => renderCard(c)).join('')}</div>
+            ${row2.length ? `<div class="hand-row" style="margin-top:8px">${row2.map(c => renderCard(c)).join('')}</div>` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderOneNight() {
+    const gs = S.snap.gameState;
+    const me = gs.me;
+    const players = gs.players || [];
+    const phase = gs.phase;
+    const role = gs.activeWakeRole;
+    const myTurn = gs.isMyNightTurn;
+    const canSelPlayer = (phase === 'dayVote' && !me.hasVoted) || (phase === 'nightStep' && myTurn && ['seer','robber','troublemaker'].includes(role));
+    const canSelCenter = phase === 'nightStep' && myTurn && ((role === 'werewolf' && gs.isLoneWolf) || role === 'seer' || role === 'drunk');
+
+    if (phase === 'gameOver') {
+      const elim = new Set(gs.eliminatedPlayerIds || []);
+      return `
+        <div class="topbar"><div><h1>一夜终极狼人 · 终局复盘</h1><small>按最终身份判定胜负</small></div></div>
+        <div class="wrap">
+          <div class="card" style="text-align:center;border-color:var(--gold)">
+            <div style="font-size:22px;font-weight:800;color:var(--gold)">${esc(gs.winnerSummary)}</div>
+          </div>
+          <div class="card">
+            <div style="font-weight:800;margin-bottom:8px">初始身份 → 最终身份</div>
+            ${players.map(p => `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><b>${p.seatNumber}号 ${esc(p.name)}</b>：${esc(p.initialRoleName)} → <span style="color:var(--gold)">${esc(p.finalRoleName)}</span> ${p.wasSwapped ? '<span class="pill gold">已换牌</span>' : ''} ${elim.has(p.playerId) ? '<span class="pill red">出局</span>' : ''}</div>`).join('')}
+          </div>
+          <div class="center-cards">
+            ${(gs.centerCards || []).map(c => `<div class="ccard">${esc(c.label)}<div style="color:var(--gold);font-size:15px;margin-top:4px">${esc(c.roleName)}</div></div>`).join('')}
+          </div>
+          <div class="card">
+            <div style="font-weight:800;margin-bottom:8px">夜晚换牌真相</div>
+            ${(gs.nightReplayLogs || []).map(l => `<div class="log-line">${esc(l)}</div>`).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="topbar">
+        <div>
+          <h1>一夜狼 · ${phase === 'nightStep' ? `${esc(gs.activeWakeRoleName)} (${gs.wakeIndex+1}/${gs.wakeTotal})` : esc(gs.phaseName)}</h1>
+          <small>${me.seatNumber}号 · ${players.length}人 + 3张底牌</small>
+        </div>
+        ${phase !== 'roleReveal' ? `<button class="btn btn-out btn-sm" data-open-modal="rolePeek">我的记忆</button>` : ''}
+      </div>
+      <div class="wrap">
+        ${S.error ? `<div class="banner err">${esc(S.error)}</div>` : ''}
+        ${S.lastEvent ? `<div class="banner night">${esc(S.lastEvent.message)}</div>` : ''}
+        ${phase === 'roleReveal' ? renderPeekCardHtml(`${me.seatNumber}号 初始身份`, me.initialRoleName, me.initialRoleCamp, me.initialRoleDescription, (me.nightNotes || []).join('\n')) : ''}
+        <div class="center-cards">
+          ${['底牌 A','底牌 B','底牌 C'].map((lbl, i) => `
+            <div class="ccard ${canSelCenter ? 'selectable' : ''} ${S.selectedCenters.has(i) ? 'sel' : ''}" ${canSelCenter ? `data-on-center="${i}"` : ''}>❓<div style="margin-top:4px">${lbl}</div></div>
+          `).join('')}
+        </div>
+        <div class="seats">
+          ${players.map(p => {
+            const isMe = p.playerId === me.playerId;
+            const ok = canSelPlayer && !isMe;
+            const sel = S.selectedTargets.has(p.playerId);
+            return `
+              <div class="seat ${isMe ? 'me' : ''} ${ok ? 'selectable' : ''} ${sel ? 'selected' : ''}" ${ok ? `data-on-seat="${p.playerId}"` : ''}>
+                <div class="seat-top"><span>${p.seatNumber}号</span><span>${(phase==='dayVote'&&p.hasVoted)||(phase==='roleReveal'&&p.confirmedRole)?'✓':''}</span></div>
+                <div class="seat-name" style="margin:10px 0">${esc(p.name)}${isMe ? '(我)' : ''}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        <div class="dock">${renderOneNightDock(gs, me)}</div>
+      </div>
+    `;
+  }
+
+  function renderOneNightDock(gs, me) {
+    if (gs.phase === 'roleReveal') {
+      return `<button class="btn btn-gold btn-block" data-on-act="confirm" ${me.confirmedRole ? 'disabled' : ''}>${me.confirmedRole ? '已确认，等待其他人…' : '我已记住初始身份，准备天黑'}</button>`;
+    }
+    if (gs.phase === 'nightStep') {
+      if (!gs.isMyNightTurn) return `<div style="text-align:center;color:var(--muted);font-size:13px">🌙 天黑请闭眼，等待【${esc(gs.activeWakeRoleName)}】行动…</div>`;
+      const role = gs.activeWakeRole;
+      const latestNote = (me.nightNotes || []).slice(-1)[0];
+      const noteHtml = latestNote ? `<div class="banner" style="text-align:center;font-weight:700">${esc(latestNote)}</div>` : '';
+      if (role === 'werewolf' && gs.isLoneWolf) {
+        return `${noteHtml}<div class="row"><button class="btn btn-out" style="flex:1" data-on-act="skip">不看底牌</button><button class="btn btn-gold" style="flex:2" data-on-act="center1" ${S.selectedCenters.size===1?'':'disabled'}>偷看选中底牌</button></div>`;
+      }
+      if (['werewolf','minion','mason','insomniac'].includes(role)) {
+        return `${noteHtml}<button class="btn btn-gold btn-block" data-on-act="skip">已记住信息，闭眼</button>`;
+      }
+      if (role === 'seer') {
+        const ok = S.selectedTargets.size === 1 || S.selectedCenters.size === 2;
+        return `<button class="btn btn-cyan btn-block" data-on-act="seer" ${ok?'':'disabled'}>${S.selectedTargets.size===1?'查验选中玩家':(S.selectedCenters.size===2?'查验2张底牌':'点选 1名玩家 或 2张底牌')}</button>`;
+      }
+      if (role === 'robber') {
+        return `<div class="row"><button class="btn btn-out" style="flex:1" data-on-act="skip">不换牌</button><button class="btn btn-purple" style="flex:2" data-on-act="robber" ${S.selectedTargets.size===1?'':'disabled'}>交换并查看新牌</button></div>`;
+      }
+      if (role === 'troublemaker') {
+        return `<div class="row"><button class="btn btn-out" style="flex:1" data-on-act="skip">不换牌</button><button class="btn btn-purple" style="flex:2" data-on-act="tm" ${S.selectedTargets.size===2?'':'disabled'}>盲换选中的2人 (${S.selectedTargets.size}/2)</button></div>`;
+      }
+      if (role === 'drunk') {
+        return `<button class="btn btn-gold btn-block" data-on-act="center1" ${S.selectedCenters.size===1?'':'disabled'}>确认与选中的底牌盲换</button>`;
+      }
+    }
+    if (gs.phase === 'dayDiscuss') return `<div style="text-align:center;color:var(--muted);font-size:13px">线下自由推理讨论中，等待房主开启投票…</div>`;
+    if (gs.phase === 'dayVote') {
+      return `<button class="btn btn-gold btn-block" data-on-act="vote" ${me.hasVoted || S.selectedTargets.size !== 1 ? 'disabled' : ''}>${me.hasVoted ? '已投票，等待揭晓…' : '确认投票给选中玩家'}</button>`;
+    }
+    return '';
+  }
+
+  function renderPeekCardHtml(sub, title, camp, desc, extra) {
+    return `
+      <div id="peekCard" class="peek-card ${S.peeking ? 'open' : ''}">
+        ${S.peeking ? `
+          <div class="pill gold">${esc(sub)} · ${esc(camp)}</div>
+          <div class="peek-title">${esc(title)}</div>
+          <div class="peek-desc">${esc(desc)}</div>
+          ${extra ? `<div style="color:var(--gold);font-size:12.5px;font-weight:700;margin-top:8px;white-space:pre-line">${esc(extra)}</div>` : ''}
+        ` : `
+          <div style="font-size:32px">🖐️</div>
+          <div style="font-size:16px;font-weight:800;margin-top:4px">${esc(sub)} 身份牌（已隐藏）</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">按住卡片查看身份，松手立即防偷窥遮挡</div>
+        `}
+      </div>
+    `;
+  }
+
+  function renderModal() {
+    if (!S.modal) return '';
+    if (S.modal === 'profile') {
+      return `
+        <div class="modal-bg" data-close-modal="1">
+          <div class="modal-box" onclick="event.stopPropagation()">
+            <div style="font-size:17px;font-weight:800;margin-bottom:10px">更换昵称与头像</div>
+            <input id="modalName" type="text" maxlength="12" value="${esc(S.name)}" />
+            <div class="avatar-grid">
+              ${AVATARS.map((a, idx) => `
+                <div class="av-item ${S.avatarIndex === idx ? 'sel' : ''}" data-pick-av="${idx}">
+                  <div class="av-circle" style="background:${a.g}">${a.e}</div>
+                  <div class="av-name">${a.n}</div>
+                </div>
+              `).join('')}
+            </div>
+            <button id="saveProfileBtn" class="btn btn-gold btn-block" style="margin-top:14px">保存并同步给全房</button>
+          </div>
+        </div>
+      `;
+    }
+    if (S.modal === 'voteHistory' && S.snap && S.snap.gameState) {
+      const hist = S.snap.gameState.voteHistory || [];
+      const players = S.snap.gameState.players || [];
+      return `
+        <div class="modal-bg" data-close-modal="1">
+          <div class="modal-box" onclick="event.stopPropagation()">
+            <div class="row" style="justify-content:space-between;margin-bottom:10px">
+              <div style="font-size:17px;font-weight:800">📊 全场公开票型记录</div>
+              <button class="btn btn-out btn-sm" data-close-modal="1">关闭</button>
+            </div>
+            ${hist.length ? [...hist].reverse().map(r => renderVoteRoundHtml(r, players)).join('') : '<div style="color:var(--muted);text-align:center;padding:20px">暂无已结算的投票记录</div>'}
+          </div>
+        </div>
+      `;
+    }
+    if (S.modal === 'rolePeek' && S.snap && S.snap.gameState) {
+      const gs = S.snap.gameState;
+      const me = gs.me;
+      const isWW = S.snap.gameType === 'werewolf';
+      return `
+        <div class="modal-bg" data-close-modal="1">
+          <div class="modal-box" onclick="event.stopPropagation()">
+            ${isWW
+              ? renderPeekCardHtml(`${me.seatNumber}号`, me.roleName, me.campName, me.roleDescription, '')
+              : renderPeekCardHtml(`${me.seatNumber}号 初始身份`, me.initialRoleName, me.initialRoleCamp, me.initialRoleDescription, (me.nightNotes || []).join('\n'))}
+            <button class="btn btn-out btn-block" data-close-modal="1">关闭</button>
+          </div>
+        </div>
+      `;
+    }
+    return '';
+  }
+
+  function render() {
+    const root = document.getElementById('app');
+    let html = '';
+    if (!S.snap) html = renderJoinScreen();
+    else if (S.snap.status === 'lobby' || !S.snap.gameState) html = renderLobby();
+    else if (S.snap.gameType === 'guandan') html = renderGuandan();
+    else if (S.snap.gameType === 'oneNight') html = renderOneNight();
+    else html = renderWerewolf();
+
+    root.innerHTML = html + renderModal();
+    bindEvents();
+  }
+
+  function bindEvents() {
+    const nameIn = document.getElementById('nameInput');
+    if (nameIn) nameIn.oninput = (e) => { S.name = e.target.value; localStorage.setItem('pb_name', S.name); };
+
+    document.querySelectorAll('[data-pick-av]').forEach(el => {
+      el.onclick = () => {
+        S.avatarIndex = parseInt(el.dataset.pickAv, 10);
+        localStorage.setItem('pb_av', String(S.avatarIndex));
+        render();
+      };
+    });
+
+    const joinBtn = document.getElementById('joinBtn');
+    if (joinBtn) joinBtn.onclick = () => {
+      if (nameIn) { S.name = nameIn.value.trim() || 'iPhone玩家'; localStorage.setItem('pb_name', S.name); }
+      connect(false);
+    };
+
+    const readyBtn = document.getElementById('readyBtn');
+    if (readyBtn) readyBtn.onclick = () => send('toggle_ready');
+
+    document.querySelectorAll('[data-open-modal]').forEach(el => {
+      el.onclick = () => { S.modal = el.dataset.openModal; S.peeking = false; render(); };
+    });
+    document.querySelectorAll('[data-close-modal]').forEach(el => {
+      el.onclick = () => { S.modal = null; S.peeking = false; render(); };
+    });
+
+    const modalName = document.getElementById('modalName');
+    if (modalName) modalName.oninput = (e) => { S.name = e.target.value; };
+
+    const saveProfile = document.getElementById('saveProfileBtn');
+    if (saveProfile) saveProfile.onclick = () => {
+      if (modalName && modalName.value.trim()) { S.name = modalName.value.trim(); localStorage.setItem('pb_name', S.name); }
+      send('update_profile', { name: S.name, avatarIndex: S.avatarIndex });
+      S.modal = null;
+      render();
+    };
+
+    const peek = document.getElementById('peekCard');
+    if (peek) {
+      const show = (e) => { e.preventDefault(); if (!S.peeking) { S.peeking = true; render(); } };
+      const hide = () => { if (S.peeking) { S.peeking = false; render(); } };
+      peek.onmousedown = show;
+      peek.onmouseup = hide;
+      peek.onmouseleave = hide;
+      peek.ontouchstart = show;
+      peek.ontouchend = hide;
+      peek.ontouchcancel = hide;
+    }
+
+    // Werewolf interactions
+    document.querySelectorAll('[data-ww-seat]').forEach(el => {
+      el.onclick = () => {
+        const id = el.dataset.wwSeat;
+        S.selectedTargetId = S.selectedTargetId === id ? null : id;
+        if (S.snap?.gameState?.phase === 'nightWolf') sendAction('wolf_select', { targetId: S.selectedTargetId });
+        render();
+      };
+    });
+    document.querySelectorAll('[data-ww-act]').forEach(el => {
+      el.onclick = () => {
+        const act = el.dataset.wwAct;
+        const targetId = el.dataset.null ? null : S.selectedTargetId;
+        sendAction(act, act === 'confirm_role' || act === 'seer_done' ? {} : { targetId });
+        S.selectedTargetId = null;
+      };
+    });
+    document.querySelectorAll('[data-witch]').forEach(el => {
+      el.onclick = () => {
+        const m = el.dataset.witch;
+        if (m === 'poison' && !S.witchPoisonMode) { S.witchPoisonMode = true; render(); return; }
+        sendAction('witch_act', m === 'poison' ? { action: 'poison', targetId: S.selectedTargetId } : { action: m });
+        S.witchPoisonMode = false; S.selectedTargetId = null;
+      };
+    });
+    document.querySelectorAll('[data-sheriff-join]').forEach(el => {
+      el.onclick = () => {
+        const v = el.dataset.sheriffJoin;
+        if (v === 'withdraw') sendAction('sheriff_withdraw');
+        else sendAction('sheriff_signup', { join: v === '1' });
+      };
+    });
+
+    // Guandan interactions
+    document.querySelectorAll('[data-gd-card]').forEach(el => {
+      el.onclick = () => {
+        const id = el.dataset.gdCard;
+        const single = S.snap?.gameState?.pendingTributePay || S.snap?.gameState?.pendingTributeReturn;
+        if (single) { S.selectedCards.clear(); S.selectedCards.add(id); }
+        else if (S.selectedCards.has(id)) S.selectedCards.delete(id);
+        else S.selectedCards.add(id);
+        render();
+      };
+    });
+    document.querySelectorAll('[data-gd-act]').forEach(el => {
+      el.onclick = () => {
+        const a = el.dataset.gdAct;
+        if (a === 'clear') { S.selectedCards.clear(); render(); }
+        else if (a === 'pass') { S.selectedCards.clear(); sendAction('pass_turn'); }
+        else if (a === 'play') { sendAction('play_cards', { cardIds: [...S.selectedCards] }); S.selectedCards.clear(); }
+        else if (a === 'pay') { sendAction('pay_tribute', { cardId: [...S.selectedCards][0] }); S.selectedCards.clear(); }
+        else if (a === 'ret') { sendAction('return_tribute', { cardId: [...S.selectedCards][0] }); S.selectedCards.clear(); }
+      };
+    });
+
+    // One Night interactions
+    document.querySelectorAll('[data-on-seat]').forEach(el => {
+      el.onclick = () => {
+        const id = el.dataset.onSeat;
+        const maxSel = S.snap?.gameState?.activeWakeRole === 'troublemaker' && S.snap?.gameState?.phase === 'nightStep' ? 2 : 1;
+        S.selectedCenters.clear();
+        if (S.selectedTargets.has(id)) S.selectedTargets.delete(id);
+        else {
+          if (maxSel === 1) S.selectedTargets.clear();
+          if (S.selectedTargets.size < maxSel) S.selectedTargets.add(id);
+        }
+        render();
+      };
+    });
+    document.querySelectorAll('[data-on-center]').forEach(el => {
+      el.onclick = () => {
+        const idx = parseInt(el.dataset.onCenter, 10);
+        const maxSel = S.snap?.gameState?.activeWakeRole === 'seer' ? 2 : 1;
+        S.selectedTargets.clear();
+        if (S.selectedCenters.has(idx)) S.selectedCenters.delete(idx);
+        else {
+          if (maxSel === 1) S.selectedCenters.clear();
+          if (S.selectedCenters.size < maxSel) S.selectedCenters.add(idx);
+        }
+        render();
+      };
+    });
+    document.querySelectorAll('[data-on-act]').forEach(el => {
+      el.onclick = () => {
+        const a = el.dataset.onAct;
+        if (a === 'confirm') sendAction('confirm_role');
+        else if (a === 'skip') sendAction('night_act', {});
+        else if (a === 'center1') sendAction('night_act', { centerIndex: [...S.selectedCenters][0] });
+        else if (a === 'seer') {
+          if (S.selectedTargets.size === 1) sendAction('night_act', { mode: 'player', targetId: [...S.selectedTargets][0] });
+          else sendAction('night_act', { mode: 'center', centerIndices: [...S.selectedCenters] });
+        }
+        else if (a === 'robber') sendAction('night_act', { targetId: [...S.selectedTargets][0] });
+        else if (a === 'tm') sendAction('night_act', { targetIds: [...S.selectedTargets] });
+        else if (a === 'vote') sendAction('cast_vote', { targetId: [...S.selectedTargets][0] });
+        S.selectedTargets.clear(); S.selectedCenters.clear();
+      };
+    });
+  }
+
+  const releasePeek = () => {
+    if (S.peeking) {
+      S.peeking = false;
+      render();
+    }
+  };
+  window.addEventListener('mouseup', releasePeek);
+  window.addEventListener('touchend', releasePeek);
+  window.addEventListener('touchcancel', releasePeek);
+
+  render();
+})();
+</script>
+</body>
+</html>

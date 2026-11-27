@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:party_core/party_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -196,10 +197,15 @@ class AppController extends ChangeNotifier {
     notifyListeners();
 
     try {
+      String? webHtml;
+      try {
+        webHtml = await rootBundle.loadString('assets/web_client/index.html');
+      } catch (_) {}
       final transport = await createLanHostTransport(
         hostName: nickname,
         hostAvatarIndex: avatarIndex,
         gameType: gameType,
+        webClientHtml: webHtml,
       );
       _attachTransport(transport);
     } catch (e) {
@@ -421,7 +427,11 @@ class AppController extends ChangeNotifier {
 
   String _normalizeWsUrl(String raw, {required int defaultPort}) {
     var trimmed = raw.trim();
-    if (!trimmed.startsWith('ws://') && !trimmed.startsWith('wss://')) {
+    if (trimmed.startsWith('http://')) {
+      trimmed = 'ws://${trimmed.substring(7)}';
+    } else if (trimmed.startsWith('https://')) {
+      trimmed = 'wss://${trimmed.substring(8)}';
+    } else if (!trimmed.startsWith('ws://') && !trimmed.startsWith('wss://')) {
       trimmed = 'ws://$trimmed';
     }
     final uri = Uri.parse(trimmed);

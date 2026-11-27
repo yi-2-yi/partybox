@@ -22,6 +22,8 @@ class LanHostGameTransport implements GameTransport {
     required this.hostPlayerId,
     required this.server,
     required this.lanWsUrl,
+    required this.lanWebUrl,
+    required this.webClientHtml,
     required this.beacon,
   });
 
@@ -29,6 +31,8 @@ class LanHostGameTransport implements GameTransport {
   final String hostPlayerId;
   final HttpServer server;
   final String lanWsUrl;
+  final String lanWebUrl;
+  final String? webClientHtml;
   final LanRoomBeacon beacon;
 
   final Map<String, _LanPeer> _peers = {};
@@ -56,8 +60,9 @@ class LanHostGameTransport implements GameTransport {
   @override
   TransportEndpointInfo get endpointInfo => TransportEndpointInfo(
         mode: ConnectionMode.lanHost,
-        label: '局域网/热点主机',
+        label: '局域网/热点主机（支持 iPhone 扫码免安装加入）',
         lanWsUrl: lanWsUrl,
+        lanWebUrl: lanWebUrl,
       );
 
   static Future<LanHostGameTransport> start({
@@ -65,6 +70,7 @@ class LanHostGameTransport implements GameTransport {
     required GameType gameType,
     int hostAvatarIndex = 0,
     int port = 8765,
+    String? webClientHtml,
   }) async {
     final random = Random();
     final roomCode = (1000 + random.nextInt(9000)).toString();
@@ -93,6 +99,7 @@ class LanHostGameTransport implements GameTransport {
 
     final localIp = await detectLocalLanIp();
     final wsUrl = 'ws://$localIp:${server.port}/ws';
+    final webUrl = 'http://$localIp:${server.port}/';
     final beacon = LanRoomBeacon(
       roomCode: roomCode,
       hostName: hostName,
@@ -107,6 +114,8 @@ class LanHostGameTransport implements GameTransport {
       hostPlayerId: hostJoin.playerId,
       server: server,
       lanWsUrl: wsUrl,
+      lanWebUrl: webUrl,
+      webClientHtml: webClientHtml,
       beacon: beacon,
     );
 
@@ -149,6 +158,17 @@ class LanHostGameTransport implements GameTransport {
         onDone: () => _handlePeerDisconnect(peer),
         onError: (_) => _handlePeerDisconnect(peer),
       );
+      return;
+    }
+
+    if ((request.uri.path == '/' || request.uri.path == '/index.html') &&
+        webClientHtml != null) {
+      request.response
+        ..statusCode = HttpStatus.ok
+        ..headers.contentType = ContentType.html
+        ..headers.set('Cache-Control', 'no-store')
+        ..write(webClientHtml!);
+      await request.response.close();
       return;
     }
 
@@ -344,11 +364,13 @@ Future<GameTransport> createLanHostTransport({
   required GameType gameType,
   int hostAvatarIndex = 0,
   int port = 8765,
+  String? webClientHtml,
 }) {
   return LanHostGameTransport.start(
     hostName: hostName,
     gameType: gameType,
     hostAvatarIndex: hostAvatarIndex,
     port: port,
+    webClientHtml: webClientHtml,
   );
 }

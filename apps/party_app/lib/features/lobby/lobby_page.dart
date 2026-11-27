@@ -82,7 +82,8 @@ class LobbyPage extends StatelessWidget {
               if (endpoint?.lanWsUrl != null &&
                   endpoint?.mode == ConnectionMode.lanHost)
                 _LanHostShareCard(
-                  wsUrl: endpoint!.lanWsUrl!,
+                  webUrl: endpoint!.lanWebUrl ?? endpoint.lanWsUrl!,
+                  wsUrl: endpoint.lanWsUrl!,
                   roomCode: snap.roomCode,
                 )
               else if (endpoint?.mode == ConnectionMode.online)
@@ -478,8 +479,13 @@ class _GuandanConfigCard extends StatelessWidget {
 }
 
 class _LanHostShareCard extends StatelessWidget {
-  const _LanHostShareCard({required this.wsUrl, required this.roomCode});
+  const _LanHostShareCard({
+    required this.webUrl,
+    required this.wsUrl,
+    required this.roomCode,
+  });
 
+  final String webUrl;
   final String wsUrl;
   final String roomCode;
 
@@ -497,9 +503,9 @@ class _LanHostShareCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: QrImageView(
-                data: wsUrl,
+                data: webUrl,
                 version: QrVersions.auto,
-                size: 92,
+                size: 102,
               ),
             ),
             const SizedBox(width: 14),
@@ -509,30 +515,33 @@ class _LanHostShareCard extends StatelessWidget {
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.wifi_tethering,
-                          color: PartyColors.gold, size: 18),
+                      Icon(Icons.qr_code_2,
+                          color: PartyColors.gold, size: 19),
                       SizedBox(width: 6),
-                      Text(
-                        '局域网/热点主机已开启',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 15),
+                      Expanded(
+                        child: Text(
+                          'iPhone / 安卓扫码免安装直连',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w800, fontSize: 14.5),
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    '朋友连上你的热点或同一 Wi-Fi 后，点「加入局域网房」自动发现，或手动输入：',
+                    '1. 朋友连上你的手机热点或同 Wi-Fi（无需流量）\n2. iPhone 直接用系统相机扫左侧二维码在 Safari 打开即玩！\n3. 已装 App 的朋友点「加入局域网房」自动发现或输入下方地址：',
                     style: TextStyle(
                       color: PartyColors.textSecondary,
-                      fontSize: 12,
+                      fontSize: 11.5,
+                      height: 1.4,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   InkWell(
                     onTap: () {
-                      Clipboard.setData(ClipboardData(text: wsUrl));
+                      Clipboard.setData(ClipboardData(text: webUrl));
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('已复制局域网连接地址')),
+                        const SnackBar(content: Text('已复制局域网直连网址')),
                       );
                     },
                     child: Container(
@@ -550,7 +559,7 @@ class _LanHostShareCard extends StatelessWidget {
                         children: [
                           Flexible(
                             child: Text(
-                              wsUrl,
+                              webUrl,
                               style: const TextStyle(
                                 fontFamily: 'monospace',
                                 color: PartyColors.gold,

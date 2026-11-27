@@ -13,6 +13,7 @@ class TransportEndpointInfo {
     required this.mode,
     required this.label,
     this.lanWsUrl,
+    this.lanWebUrl,
     this.onlineServerUrl,
   });
 
@@ -21,6 +22,11 @@ class TransportEndpointInfo {
 
   /// Non-null in LAN Host mode, e.g. `ws://192.168.43.1:8765/ws`
   final String? lanWsUrl;
+
+  /// Browser URL hosted by the LAN Host for zero-install iOS/Android Safari join,
+  /// e.g. `http://192.168.43.1:8765/`
+  final String? lanWebUrl;
+
   final String? onlineServerUrl;
 }
 
