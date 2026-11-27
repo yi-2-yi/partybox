@@ -5,6 +5,7 @@ import 'package:party_core/party_core.dart';
 
 import '../../../core/state/app_controller.dart';
 import '../../../core/theme/party_theme.dart';
+import '../../common/room_guards.dart';
 
 Color oneNightRoleColor(OneNightRole role) => switch (role) {
       OneNightRole.werewolf => PartyColors.wolfRed,
@@ -168,7 +169,7 @@ class _OneNightTablePageState extends State<OneNightTablePage> {
         leading: IconButton(
           icon: const Icon(Icons.exit_to_app),
           tooltip: '退出房间',
-          onPressed: ctrl.leaveRoom,
+          onPressed: () => confirmLeaveRoom(context, ctrl),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -186,6 +187,7 @@ class _OneNightTablePageState extends State<OneNightTablePage> {
           ],
         ),
         actions: [
+          LanReconnectQrButton(controller: ctrl),
           if (phase != OneNightPhase.roleReveal &&
               phase != OneNightPhase.gameOver)
             TextButton.icon(

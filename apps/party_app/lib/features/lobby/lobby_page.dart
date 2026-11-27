@@ -6,6 +6,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../core/avatars/party_avatars.dart';
 import '../../core/state/app_controller.dart';
 import '../../core/theme/party_theme.dart';
+import '../common/room_guards.dart';
 import '../settings/voice_settings_sheet.dart';
 
 class LobbyPage extends StatelessWidget {
@@ -40,7 +41,7 @@ class LobbyPage extends StatelessWidget {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           tooltip: '离开房间',
-          onPressed: () => controller.leaveRoom(),
+          onPressed: () => confirmLeaveRoom(context, controller),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -56,6 +57,15 @@ class LobbyPage extends StatelessWidget {
           ],
         ),
         actions: [
+          if (controller.isLanHost)
+            IconButton(
+              tooltip: controller.keepScreenAwake ? '屏幕常亮已开启（点击关闭）' : '开启房主屏幕常亮',
+              icon: Icon(
+                controller.keepScreenAwake ? Icons.wb_sunny : Icons.wb_sunny_outlined,
+                color: controller.keepScreenAwake ? PartyColors.gold : PartyColors.textMuted,
+              ),
+              onPressed: controller.toggleKeepScreenAwake,
+            ),
           IconButton(
             tooltip: '法官语音设置',
             icon: const Icon(Icons.record_voice_over, color: PartyColors.gold),

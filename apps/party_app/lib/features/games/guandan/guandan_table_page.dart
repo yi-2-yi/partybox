@@ -3,6 +3,7 @@ import 'package:party_core/party_core.dart';
 
 import '../../../core/state/app_controller.dart';
 import '../../../core/theme/party_theme.dart';
+import '../../common/room_guards.dart';
 import 'playing_card_widget.dart';
 
 class GuandanTablePage extends StatefulWidget {
@@ -149,7 +150,7 @@ class _GuandanTablePageState extends State<GuandanTablePage> {
         leading: IconButton(
           icon: const Icon(Icons.exit_to_app),
           tooltip: '退出房间',
-          onPressed: ctrl.leaveRoom,
+          onPressed: () => confirmLeaveRoom(context, ctrl),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -170,6 +171,7 @@ class _GuandanTablePageState extends State<GuandanTablePage> {
           ],
         ),
         actions: [
+          LanReconnectQrButton(controller: ctrl),
           IconButton(
             icon: Icon(
               ctrl.ttsEnabled ? Icons.volume_up : Icons.volume_off,

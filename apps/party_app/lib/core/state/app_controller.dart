@@ -6,6 +6,7 @@ import 'package:party_core/party_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../audio/narrator_service.dart';
+import '../platform/screen_awake.dart';
 import '../transport/game_transport.dart';
 import '../transport/lan_host_transport.dart';
 import '../transport/local_demo_transport.dart';
@@ -41,10 +42,20 @@ class AppController extends ChangeNotifier {
   String? lastError;
   GameEvent? latestEvent;
   bool isBusy = false;
+  bool keepScreenAwake = true;
 
   bool get ttsEnabled => voiceSettings.enabled;
   TransportEndpointInfo? get endpointInfo => _transport?.endpointInfo;
   bool get inRoom => snapshot != null;
+  bool get isLanHost => endpointInfo?.mode == ConnectionMode.lanHost;
+
+  void toggleKeepScreenAwake() {
+    keepScreenAwake = !keepScreenAwake;
+    if (isLanHost) {
+      ScreenAwakeService.setEnabled(keepScreenAwake);
+    }
+    notifyListeners();
+  }
 
   Future<void> loadPreferences() async {
     try {
@@ -208,6 +219,7 @@ class AppController extends ChangeNotifier {
         webClientHtml: webHtml,
       );
       _attachTransport(transport);
+      ScreenAwakeService.setEnabled(keepScreenAwake);
     } catch (e) {
       lastError = e.toString().replaceFirst('UnsupportedError: ', '');
     } finally {
@@ -423,6 +435,7 @@ class AppController extends ChangeNotifier {
     snapshot = null;
     latestEvent = null;
     connectionStatus = TransportStatus.disconnected;
+    ScreenAwakeService.setEnabled(false);
   }
 
   String _normalizeWsUrl(String raw, {required int defaultPort}) {

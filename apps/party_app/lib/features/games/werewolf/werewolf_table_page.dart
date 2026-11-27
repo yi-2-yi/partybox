@@ -6,6 +6,7 @@ import 'package:party_core/party_core.dart';
 import '../../../core/avatars/party_avatars.dart';
 import '../../../core/state/app_controller.dart';
 import '../../../core/theme/party_theme.dart';
+import '../../common/room_guards.dart';
 import '../../settings/voice_settings_sheet.dart';
 import 'role_card_widget.dart';
 
@@ -182,7 +183,7 @@ class _WerewolfTablePageState extends State<WerewolfTablePage> {
         leading: IconButton(
           icon: const Icon(Icons.exit_to_app),
           tooltip: '退出房间',
-          onPressed: () => ctrl.leaveRoom(),
+          onPressed: () => confirmLeaveRoom(context, ctrl),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -200,6 +201,7 @@ class _WerewolfTablePageState extends State<WerewolfTablePage> {
           ],
         ),
         actions: [
+          LanReconnectQrButton(controller: ctrl),
           if (recordVoteHistory)
             TextButton.icon(
               onPressed: () => _showVoteHistorySheet(players, voteHistory),

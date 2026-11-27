@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:party_app/core/audio/narrator_service.dart';
 import 'package:party_app/core/state/app_controller.dart';
 import 'package:party_app/core/transport/lan_host_transport_io.dart';
-import 'package:party_app/core/transport/websocket_transport.dart';
 import 'package:party_app/main.dart';
 import 'package:party_core/party_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -93,29 +92,52 @@ void main() {
         final body = await resp.transform(utf8.decoder).join();
         expect(body, contains('PartyBox'));
         expect(body, contains('join_room'));
+        expect(body, contains('pb_sess_'));
+        expect(body, contains('visibilitychange'));
       } finally {
         httpClient.close(force: true);
       }
     }, _RealHttpOverrides());
 
-    // 2. Connect a real LAN WebSocket client to the same host port
-    final uri = Uri.parse(wsUrl).replace(host: '127.0.0.1').toString();
-    final client = WebSocketGameTransport(
-      wsUrl: uri,
-      mode: ConnectionMode.lanClient,
-      initialMessage: const ClientMessage(
+    // 2. Simulate a mobile browser joining over WebSocket, abruptly killing the
+    //    browser (socket drop without leave_room), and reopening with saved localStorage token.
+    await HttpOverrides.runWithHttpOverrides(() async {
+      final uri = Uri.parse(wsUrl).replace(host: '127.0.0.1').toString();
+      final ws1 = await WebSocket.connect(uri);
+      final ws1Msgs = ws1.asBroadcastStream();
+      ws1.add(const ClientMessage(
         type: ClientMessageType.joinRoom,
         payload: {'name': '朋友手机', 'avatarIndex': 4},
-      ),
-    );
-    addTearDown(client.close);
+      ).encode());
 
-    final clientSnapFuture = client.snapshots.firstWhere(
-      (s) => s.players.length == 2,
-    );
-    await client.connect();
-    final snap = await clientSnapFuture.timeout(const Duration(seconds: 5));
-    expect(snap.players.map((p) => p.name), containsAll(['房主手机', '朋友手机']));
+      final firstRaw = await ws1Msgs.first.timeout(const Duration(seconds: 5)) as String;
+      final firstMsg = ServerMessage.decode(firstRaw);
+      final snap = RoomSnapshot.fromJson(firstMsg.payload);
+      expect(snap.players.map((p) => p.name), containsAll(['房主手机', '朋友手机']));
+      final savedPlayerId = snap.yourPlayerId!;
+      final savedToken = snap.sessionToken!;
+
+      // Abruptly drop socket (like killing Safari/Chrome in background)
+      await ws1.close();
+
+      // Reopen a brand-new socket and send saved reconnect credentials
+      final ws2 = await WebSocket.connect(uri);
+      addTearDown(ws2.close);
+      final ws2Msgs = ws2.asBroadcastStream();
+      ws2.add(ClientMessage(
+        type: ClientMessageType.reconnect,
+        payload: {
+          'playerId': savedPlayerId,
+          'sessionToken': savedToken,
+        },
+      ).encode());
+
+      final reRaw = await ws2Msgs.first.timeout(const Duration(seconds: 5)) as String;
+      final reSnap = RoomSnapshot.fromJson(ServerMessage.decode(reRaw).payload);
+      expect(reSnap.yourPlayerId, savedPlayerId);
+      expect(reSnap.me?.isConnected, isTrue);
+      expect(reSnap.me?.name, '朋友手机');
+    }, _RealHttpOverrides());
   });
 
   testWidgets('Guandan Demo Lobby -> Deal 27 cards -> Hint & Play flow', (tester) async {

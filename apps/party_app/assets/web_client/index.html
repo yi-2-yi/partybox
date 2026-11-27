@@ -196,14 +196,43 @@
   const avOf = (i) => AVATARS[((i || 0) % 16 + 16) % 16];
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
+  const SESS_KEY = `pb_sess_${location.host}`;
+  function loadSavedSession() {
+    try {
+      const raw = localStorage.getItem(SESS_KEY);
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      if (obj && obj.playerId && obj.token) return obj;
+    } catch (_) {}
+    return null;
+  }
+  function saveSession(playerId, token, roomCode) {
+    try {
+      localStorage.setItem(SESS_KEY, JSON.stringify({
+        playerId,
+        token,
+        roomCode: roomCode || '',
+        savedAt: Date.now(),
+      }));
+    } catch (_) {}
+  }
+  function clearSavedSession() {
+    S.playerId = null;
+    S.token = null;
+    try { localStorage.removeItem(SESS_KEY); } catch (_) {}
+  }
+
+  const savedSess = loadSavedSession();
   const S = {
     name: localStorage.getItem('pb_name') || '',
     avatarIndex: parseInt(localStorage.getItem('pb_av') || '0', 10) || 0,
     ws: null,
+    reconnectTimer: null,
     status: 'idle', // idle | connecting | connected | reconnecting
+    autoReconnecting: false,
     snap: null,
-    token: sessionStorage.getItem('pb_tok') || null,
-    playerId: sessionStorage.getItem('pb_pid') || null,
+    token: savedSess ? savedSess.token : null,
+    playerId: savedSess ? savedSess.playerId : null,
     lastEvent: null,
     error: null,
     // Interactive UI selections
@@ -232,34 +261,52 @@
     send('game_action', { actionType, data });
   }
 
-  function connect(isReconnect = false) {
+  function scheduleReconnect(delayMs = 1500) {
+    if (S.reconnectTimer) clearTimeout(S.reconnectTimer);
+    S.reconnectTimer = setTimeout(() => {
+      S.reconnectTimer = null;
+      if (S.playerId && S.token && (!S.ws || S.ws.readyState > 1)) {
+        connect(true, false);
+      }
+    }, delayMs);
+  }
+
+  function connect(isReconnect = false, silentAuto = false) {
+    if (S.reconnectTimer) {
+      clearTimeout(S.reconnectTimer);
+      S.reconnectTimer = null;
+    }
+    if (S.ws && (S.ws.readyState === 0 || S.ws.readyState === 1)) {
+      try { S.ws.close(); } catch (_) {}
+    }
     S.error = null;
+    S.autoReconnecting = !!(isReconnect && silentAuto);
     S.status = isReconnect ? 'reconnecting' : 'connecting';
     render();
     try {
       const ws = new WebSocket(wsEndpoint());
       S.ws = ws;
       ws.onopen = () => {
+        if (S.ws !== ws) return;
         S.status = 'connected';
         if (isReconnect && S.playerId && S.token) {
           send('reconnect', { playerId: S.playerId, sessionToken: S.token });
         } else {
-          send('join_room', { name: S.name || 'iPhone玩家', avatarIndex: S.avatarIndex, playerId: S.playerId || undefined });
+          send('join_room', { name: S.name || '玩家', avatarIndex: S.avatarIndex });
         }
         render();
       };
       ws.onmessage = (ev) => {
+        if (S.ws !== ws) return;
         try {
           const msg = JSON.parse(ev.data);
           if (msg.type === 'room_snapshot') {
             S.snap = msg.payload;
-            if (S.snap.yourPlayerId) {
-              S.playerId = S.snap.yourPlayerId;
-              sessionStorage.setItem('pb_pid', S.playerId);
-            }
-            if (S.snap.sessionToken) {
-              S.token = S.snap.sessionToken;
-              sessionStorage.setItem('pb_tok', S.token);
+            S.autoReconnecting = false;
+            if (S.snap.yourPlayerId) S.playerId = S.snap.yourPlayerId;
+            if (S.snap.sessionToken) S.token = S.snap.sessionToken;
+            if (S.playerId && S.token) {
+              saveSession(S.playerId, S.token, S.snap.roomCode);
             }
             const phaseKey = S.snap.gameState ? `${S.snap.gameType}_${S.snap.gameState.phase}_${S.snap.gameState.dayNumber || S.snap.gameState.wakeIndex || S.snap.revision}` : 'lobby';
             if (S.snap.gameType !== 'guandan' && phaseKey !== S.lastPhaseKey) {
@@ -279,22 +326,37 @@
             S.lastEvent = msg.payload;
             render();
           } else if (msg.type === 'error') {
+            if (!S.snap && S.autoReconnecting) {
+              // Stale token from a previous closed room — fall back cleanly to join screen.
+              S.autoReconnecting = false;
+              clearSavedSession();
+              S.status = 'idle';
+              try { ws.close(); } catch (_) {}
+              render();
+              return;
+            }
             S.error = msg.payload.message || '操作失败';
             render();
           }
         } catch (_) {}
       };
       ws.onclose = () => {
+        if (S.ws !== ws) return;
         if (S.snap && S.playerId && S.token) {
           S.status = 'reconnecting';
           render();
-          setTimeout(() => connect(true), 1800);
+          scheduleReconnect(1600);
+        } else if (S.autoReconnecting) {
+          S.autoReconnecting = false;
+          S.status = 'idle';
+          render();
         } else {
           S.status = 'idle';
           render();
         }
       };
     } catch (e) {
+      S.autoReconnecting = false;
       S.error = '连接房主失败，请确认仍连接在同一热点或 Wi-Fi 下。';
       S.status = 'idle';
       render();
@@ -304,6 +366,15 @@
   setInterval(() => {
     if (S.ws && S.ws.readyState === 1) send('ping');
   }, 15000);
+
+  const tryResumeConnection = () => {
+    if (document.visibilityState === 'hidden') return;
+    if (S.snap && S.playerId && S.token && (!S.ws || S.ws.readyState > 1)) {
+      connect(true, false);
+    }
+  };
+  document.addEventListener('visibilitychange', tryResumeConnection);
+  window.addEventListener('online', tryResumeConnection);
 
   function seatLabel(players, id) {
     const p = (players || []).find(x => (x.playerId || x.id) === id);
@@ -316,6 +387,7 @@
   }
 
   function renderJoinScreen() {
+    const hasSavedSeat = !!(S.playerId && S.token);
     return `
       <div class="topbar">
         <div>
@@ -325,9 +397,25 @@
       </div>
       <div class="wrap">
         ${S.error ? `<div class="banner err">${esc(S.error)}</div>` : ''}
+        ${S.autoReconnecting ? `
+          <div class="banner">
+            正在自动重连回到你原来的座位…
+            <div style="margin-top:8px">
+              <button id="cancelAutoBtn" class="btn btn-out btn-sm">取消重连，作为新玩家加入</button>
+            </div>
+          </div>
+        ` : (hasSavedSeat ? `
+          <div class="banner">
+            检测到你刚才的牌局座位记录，点击可直接无缝回座：
+            <div class="row" style="margin-top:8px">
+              <button id="resumeSeatBtn" class="btn btn-gold btn-sm" style="flex:1">回到原座位</button>
+              <button id="clearSeatBtn" class="btn btn-out btn-sm">换新身份</button>
+            </div>
+          </div>
+        ` : '')}
         <div class="card">
           <div style="font-size:17px;font-weight:800;margin-bottom:4px">加入房主的聚会房间</div>
-          <div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">选一个喜欢的头像和昵称，点击下方按钮立即入座（支持狼人杀、掼蛋、一夜狼）</div>
+          <div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">选一个喜欢的头像和昵称，点击下方按钮立即入座（支持狼人杀、掼蛋、一夜狼；误关浏览器重新扫码可自动回到原座位）</div>
           <input id="nameInput" type="text" maxlength="12" placeholder="输入你的昵称（例如：小明）" value="${esc(S.name)}" />
           <div style="font-size:12px;color:var(--muted);font-weight:700;margin-top:14px">选择头像（小动物 / 动漫人物）</div>
           <div class="avatar-grid">
@@ -338,7 +426,7 @@
               </div>
             `).join('')}
           </div>
-          <button id="joinBtn" class="btn btn-gold btn-block" style="margin-top:16px" ${S.status === 'connecting' ? 'disabled' : ''}>
+          <button id="joinBtn" class="btn btn-gold btn-block" style="margin-top:16px" ${S.status === 'connecting' || S.autoReconnecting ? 'disabled' : ''}>
             ${S.status === 'connecting' ? '正在连接房主…' : '立即加入房间'}
           </button>
         </div>
@@ -869,10 +957,30 @@
       };
     });
 
+    const cancelAutoBtn = document.getElementById('cancelAutoBtn');
+    if (cancelAutoBtn) cancelAutoBtn.onclick = () => {
+      S.autoReconnecting = false;
+      clearSavedSession();
+      if (S.ws) { try { S.ws.close(); } catch (_) {} S.ws = null; }
+      S.status = 'idle';
+      render();
+    };
+
+    const resumeSeatBtn = document.getElementById('resumeSeatBtn');
+    if (resumeSeatBtn) resumeSeatBtn.onclick = () => connect(true, false);
+
+    const clearSeatBtn = document.getElementById('clearSeatBtn');
+    if (clearSeatBtn) clearSeatBtn.onclick = () => {
+      clearSavedSession();
+      S.error = null;
+      render();
+    };
+
     const joinBtn = document.getElementById('joinBtn');
     if (joinBtn) joinBtn.onclick = () => {
-      if (nameIn) { S.name = nameIn.value.trim() || 'iPhone玩家'; localStorage.setItem('pb_name', S.name); }
-      connect(false);
+      if (nameIn) { S.name = nameIn.value.trim() || '玩家'; localStorage.setItem('pb_name', S.name); }
+      clearSavedSession();
+      connect(false, false);
     };
 
     const readyBtn = document.getElementById('readyBtn');
@@ -1018,7 +1126,11 @@
   window.addEventListener('touchend', releasePeek);
   window.addEventListener('touchcancel', releasePeek);
 
-  render();
+  if (S.playerId && S.token) {
+    connect(true, true);
+  } else {
+    render();
+  }
 })();
 </script>
 </body>
